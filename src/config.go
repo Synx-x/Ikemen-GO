@@ -115,6 +115,7 @@ type Config struct {
 		EscOpensMenu      bool     `ini:"EscOpensMenu" sync:"host"`
 		BackgroundLoading bool     `ini:"BackgroundLoading" sync:"host"`
 		TurnsPreloading   bool     `ini:"TurnsPreloading" sync:"host"`
+		BootLoadingMode   int32    `ini:"BootLoadingMode" sync:"host"`
 		FirstRun          bool     `ini:"FirstRun"`
 		WindowTitle       string   `ini:"WindowTitle"`
 		WindowIcon        []string `ini:"WindowIcon"`
