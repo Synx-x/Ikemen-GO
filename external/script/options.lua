@@ -168,7 +168,7 @@ options.t_itemname = {
 			--modifyGameOption('Config.TickInterpolation', true)
 			--modifyGameOption('Config.ZoomActive', true)
 			--modifyGameOption('Config.EscOpensMenu', true)
-			--modifyGameOption('Config.BackgroundLoading', false) --TODO: not implemented
+			modifyGameOption('Config.BackgroundLoading', false)
 			--modifyGameOption('Config.FirstRun', false)
 			--modifyGameOption('Config.WindowTitle', "Ikemen GO")
 			--modifyGameOption('Config.WindowIcon', {"external/icons/IkemenCylia_256.png", "external/icons/IkemenCylia_96.png", "external/icons/IkemenCylia_48.png"})
@@ -1251,7 +1251,7 @@ options.t_itemname = {
 		return true
 	end,
 	--Background Loading
-	--[[['backgroundloading'] = function(t, item, cursorPosY, moveTxt)
+	['backgroundloading'] = function(t, item, cursorPosY, moveTxt)
 		if getInput(-1, motif.option_info.menu.add.key, motif.option_info.menu.subtract.key, motif.option_info.menu.done.key) then
 			sndPlay(motif.Snd, motif.option_info.cursor.move.snd[1], motif.option_info.cursor.move.snd[2])
 			if gameOption('Config.BackgroundLoading') then
@@ -1263,7 +1263,7 @@ options.t_itemname = {
 			options.modified = true
 		end
 		return true
-	end,]]
+	end,
 	--HelperMax
 	['helpermax'] = function(t, item, cursorPosY, moveTxt)
 		if getInput(-1, motif.option_info.menu.add.key) then
@@ -1507,9 +1507,9 @@ options.t_vardisplay = {
 	['autoguard'] = function()
 		return options.f_boolDisplay(gameOption('Options.AutoGuard'))
 	end,
-	--['backgroundloading'] = function()
-	--	return options.f_boolDisplay(gameOption('Config.BackgroundLoading'), motif.option_info.menu.valuename.enabled, motif.option_info.menu.valuename.disabled)
-	--end,
+	['backgroundloading'] = function()
+		return options.f_boolDisplay(gameOption('Config.BackgroundLoading'), motif.option_info.menu.valuename.enabled, motif.option_info.menu.valuename.disabled)
+	end,
 	['bgmvolume'] = function()
 		return gameOption('Sound.BGMVolume') .. '%'
 	end,
