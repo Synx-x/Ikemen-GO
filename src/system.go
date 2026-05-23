@@ -1517,6 +1517,26 @@ func (s *System) playerID(id int32) *Char {
 	return c
 }
 
+func (s *System) playerIDLoaded(id int32) *Char {
+	if id < 0 {
+		return nil
+	}
+
+	if ch := s.playerID(id); ch != nil {
+		return ch
+	}
+
+	for _, chars := range s.chars {
+		for _, ch := range chars {
+			if ch != nil && ch.id == id && !ch.csf(CSF_destroy) {
+				return ch
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *System) playerIDExist(id BytecodeValue) BytecodeValue {
 	if id.IsUndefined() {
 		return BytecodeUndefined()

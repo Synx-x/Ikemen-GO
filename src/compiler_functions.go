@@ -6440,6 +6440,14 @@ func (c *CharCompiler) modifyPlayer(is IniSection, sc *StateControllerBase) (Sta
 			modifyPlayer_redirectid, VT_Int, 1, false); err != nil {
 			return err
 		}
+		if err := c.paramValue(is, sc, "disabled",
+			modifyPlayer_disabled, VT_Bool, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "standby",
+			modifyPlayer_standby, VT_Bool, 1, false); err != nil {
+			return err
+		}
 		if err := c.paramValue(is, sc, "lifemax",
 			modifyPlayer_lifemax, VT_Int, 1, false); err != nil {
 			return err

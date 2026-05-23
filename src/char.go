@@ -12835,6 +12835,43 @@ func (cl *CharList) add(c *Char) {
 	cl.idMap[c.id] = c
 }
 
+func (cl *CharList) addIfMissing(c *Char) {
+	if c == nil || c.id < 0 || c.csf(CSF_destroy) {
+		return
+	}
+
+	if existing, ok := cl.idMap[c.id]; ok {
+		if existing == c {
+			return
+		}
+		panic(Error("Attempted to overwrite an active Char in CharList"))
+	}
+
+	// Defensive duplicate-pointer check. Normally delete() removes the char
+	// from both creationOrder and runOrder, but this keeps reactivation safe if
+	// only the idMap entry is missing for some reason.
+	for _, existing := range cl.creationOrder {
+		if existing == c {
+			cl.idMap[c.id] = c
+
+			for _, r := range cl.runOrder {
+				if r == c {
+					return
+				}
+			}
+
+			cl.runOrder = append(cl.runOrder, c)
+			return
+		}
+
+		if existing != nil && existing.id == c.id {
+			panic(Error("Attempted to overwrite an active Char in CharList"))
+		}
+	}
+
+	cl.add(c)
+}
+
 func (cl *CharList) delete(dc *Char) {
 	// Remove the char pointer from the idMap directly
 	// This is safer than removing by ID

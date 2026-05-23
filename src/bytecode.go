@@ -4803,11 +4803,18 @@ func (scb StateControllerBase) hasParam(paramID byte) bool {
 }
 
 func getRedirectedChar(c *Char, sc StateControllerBase, redirectID byte, scname string) *Char {
+	return getRedirectedCharWithLookup(c, sc, redirectID, scname, sys.playerID)
+}
+
+func getRedirectedCharWithLookup(c *Char, sc StateControllerBase, redirectID byte, scname string, lookup func(int32) *Char) *Char {
+	if lookup == nil {
+		lookup = sys.playerID
+	}
 	crun := c
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		if paramID == redirectID {
 			input := exp[0].evalI(c)
-			if r := sys.playerID(input); r != nil {
+			if r := lookup(input); r != nil {
 				crun = r
 			} else {
 				crun = nil
@@ -14108,7 +14115,9 @@ func (sc depth) Run(c *Char, _ []int32) bool {
 type modifyPlayer StateControllerBase
 
 const (
-	modifyPlayer_lifemax byte = iota
+	modifyPlayer_disabled byte = iota
+	modifyPlayer_standby
+	modifyPlayer_lifemax
 	modifyPlayer_powermax
 	modifyPlayer_dizzypointsmax
 	modifyPlayer_guardpointsmax
@@ -14134,13 +14143,30 @@ const (
 
 // TODO: Undo all effects if a cached character is loaded
 func (sc modifyPlayer) Run(c *Char, _ []int32) bool {
-	crun := getRedirectedChar(c, StateControllerBase(sc), modifyPlayer_redirectid, "ModifyPlayer")
+	crun := getRedirectedCharWithLookup(c, StateControllerBase(sc), modifyPlayer_redirectid, "ModifyPlayer", sys.playerIDLoaded)
 	if crun == nil {
 		return false
 	}
 
 	StateControllerBase(sc).run(c, func(paramID byte, exp []BytecodeExp) bool {
 		switch paramID {
+		case modifyPlayer_disabled:
+			disabled := exp[0].evalB(c)
+			if disabled {
+				crun.setSCF(SCF_disabled)
+			} else {
+				sys.charList.addIfMissing(crun)
+				crun.unsetSCF(SCF_disabled)
+				//crun.teamside = crun.playerNo & 1
+			}
+			//sys.charList.enemyNearChanged = true
+		case modifyPlayer_standby:
+			standby := exp[0].evalB(c)
+			if standby {
+				crun.setSCF(SCF_standby)
+			} else {
+				crun.unsetSCF(SCF_standby)
+			}
 		case modifyPlayer_lifemax:
 			lm := exp[0].evalI(c)
 			if lm < 1 {
