@@ -2981,11 +2981,16 @@ func systemScriptInit(l *lua.LState) {
 
 				for i, c := range sys.chars {
 					if len(c) > 0 {
+						// Skip BG-loaded Turns mode chars so CharList bookkeeping doesn't try to replace nonexistent entries on later rounds.
+						if sys.bgLoadingTurns() && sys.tmode[i&1] == TM_Turns && c[0].teamside == -1 {
+							continue
+						}
 						// Add or replace in charList
 						if sys.round == 1 {
 							sys.charList.add(c[0])
 						} else if c[0].roundsExisted() == 0 {
-							if !sys.charList.replace(c[0], i, 0) {
+							// BG-loaded Turns switching updates CharList inside activateNextTurnsFighters().
+							if !(sys.bgLoadingTurns() && sys.tmode[i&1] == TM_Turns) && !sys.charList.replace(c[0], i, 0) {
 								panic(fmt.Errorf("failed to replace player: %v", i))
 							}
 						}
@@ -3111,7 +3116,13 @@ func systemScriptInit(l *lua.LState) {
 					}
 				}
 
-				sys.loader.reset()
+				if sys.bgLoadingTurns() {
+					// In BG-loaded Turns, all team members are already resident.
+					sys.activateNextTurnsFighters()
+				} else {
+					// Legacy Turns behavior: reload the next fighter between rounds.
+					sys.loader.reset()
+				}
 			}
 
 			// If not restarting match
@@ -4788,9 +4799,13 @@ func systemScriptInit(l *lua.LState) {
 		if !sys.cfg.Config.BackgroundLoading {
 			sys.selMutex.RLock()
 			for k, v := range sys.sel.selected {
-				if len(v) < int(sys.numSimul[k]) {
+				expected := int(sys.numSimul[k])
+				if sys.tmode[k] == TM_Turns && sys.bgLoadingTurns() {
+					expected = int(sys.numTurns[k])
+				}
+				if len(v) < expected {
 					sys.selMutex.RUnlock()
-					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, sys.numSimul[k], len(v))
+					l.RaiseError("\nNot enough P%v side chars to load: expected %v, got %v\n", k+1, expected, len(v))
 				}
 			}
 			sys.selMutex.RUnlock()

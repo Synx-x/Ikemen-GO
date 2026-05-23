@@ -114,6 +114,7 @@ type Config struct {
 		ZoomActive        bool     `ini:"ZoomActive" sync:"host"`
 		EscOpensMenu      bool     `ini:"EscOpensMenu" sync:"host"`
 		BackgroundLoading bool     `ini:"BackgroundLoading" sync:"host"`
+		TurnsPreloading   bool     `ini:"TurnsPreloading" sync:"host"`
 		FirstRun          bool     `ini:"FirstRun"`
 		WindowTitle       string   `ini:"WindowTitle"`
 		WindowIcon        []string `ini:"WindowIcon"`

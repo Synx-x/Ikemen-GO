@@ -2023,6 +2023,10 @@ func (s *System) initPlayerID() {
 		c := sys.chars[i][0]
 
 		if sys.round == 1 || c.roundsExisted() == 0 {
+			// In BG-loaded Turns, promoted fighters already have a valid ID
+			if sys.bgLoadingTurns() && sys.tmode[i&1] == TM_Turns && c.id >= 0 {
+				return
+			}
 			c.id = sys.newCharId()
 		}
 	}
@@ -3244,6 +3248,7 @@ func (s *System) roundEndDecision() bool {
 	checkPerfect := func(team int) bool {
 		for i := team; i < MaxSimul*2; i += 2 {
 			if len(s.chars[i]) > 0 &&
+				s.chars[i][0].teamside != -1 &&
 				s.chars[i][0].life < s.chars[i][0].lifeMax {
 				return false
 			}
@@ -3259,7 +3264,7 @@ func (s *System) roundEndDecision() bool {
 		for i := team; i < MaxSimul*2; i += 2 {
 			if len(s.chars[i]) > 0 {
 				char := s.chars[i][0]
-				if float32(char.life) > float32(char.lifeMax)*clutchRatio {
+				if char.teamside != -1 && float32(char.life) > float32(char.lifeMax)*clutchRatio {
 					return false
 				}
 			}
@@ -3299,6 +3304,9 @@ func (s *System) roundEndDecision() bool {
 		for i := 0; i < 2; i++ { // Check life percentage of each team
 			for j := i; j < MaxSimul*2; j += 2 {
 				if len(s.chars[j]) > 0 {
+					if s.chars[j][0].teamside == -1 {
+						continue
+					}
 					if s.tmode[i] == TM_Simul || s.tmode[i] == TM_Tag {
 						l[i] += (float32(s.chars[j][0].life) / float32(s.numSimul[i])) / float32(s.chars[j][0].lifeMax)
 					} else {
@@ -3357,7 +3365,7 @@ func (s *System) roundEndDecision() bool {
 	// Update win triggers if finish type was changed
 	if ft != s.finishType {
 		for i, p := range s.chars {
-			if len(p) > 0 && ko[^i&1] {
+			if len(p) > 0 && p[0].teamside != -1 && ko[^i&1] {
 				for _, h := range p {
 					for _, tid := range h.targets {
 						if t := s.playerID(tid); t != nil {
@@ -4043,6 +4051,9 @@ func (s *System) runNextRound() bool {
 				if s.chars[i][0].win() || (!s.chars[i][0].lose() && tm != TM_Turns) {
 					for j := i; j < len(s.chars); j += 2 {
 						if len(s.chars[j]) > 0 {
+							if tm == TM_Turns && j != i {
+								continue
+							}
 							if !s.chars[j][0].win() {
 								s.chars[j][0].life = Max(1, s.cgi[j].data.life)
 							}
@@ -5041,16 +5052,153 @@ func (l *Loader) loadAttachedChar(pn int) int {
 }
 */
 
+func (s *System) bgLoadingTurns() bool {
+	return s.cfg.Config.BackgroundLoading && s.cfg.Config.TurnsPreloading
+}
+
+// Rewrite slot-indexed fields inside chars when a preloaded Turns member is promoted into P1/P2.
+func (s *System) remapCharSlotRefs(chars []*Char, oldSlot, newSlot int) {
+	oldCPU := oldSlot ^ -1
+	newCPU := newSlot ^ -1
+	for _, ch := range chars {
+		if ch == nil {
+			continue
+		}
+		ch.playerNo = newSlot
+		ch.ss.sb.playerNo = newSlot
+		if ch.controller == oldSlot {
+			ch.controller = newSlot
+		} else if ch.controller == oldCPU {
+			ch.controller = newCPU
+		}
+		if ch.animPN == oldSlot {
+			ch.animPN = newSlot
+		}
+		if ch.spritePN == oldSlot {
+			ch.spritePN = newSlot
+		}
+		// Commands are slot-indexed.
+		if oldSlot >= 0 && newSlot >= 0 && oldSlot < len(ch.cmd) && newSlot < len(ch.cmd) {
+			ch.cmd[oldSlot], ch.cmd[newSlot] = ch.cmd[newSlot], ch.cmd[oldSlot]
+		}
+	}
+}
+
+func (s *System) rebindCgiStateOwners(pn int) {
+	if pn < 0 || pn >= len(s.cgi) || s.cgi[pn].states == nil {
+		return
+	}
+	keys := make([]int32, 0, len(s.cgi[pn].states))
+	for k := range s.cgi[pn].states {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		sb := s.cgi[pn].states[k]
+		if sb.playerNo != pn {
+			sb.playerNo = pn
+			s.cgi[pn].states[k] = sb
+		}
+	}
+}
+
+func (s *System) removePlayerFromCharList(pn int) {
+	for {
+		removed := false
+		for _, c := range s.charList.creationOrder {
+			if c != nil && c.playerNo == pn {
+				s.charList.delete(c)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			return
+		}
+	}
+}
+
+func (s *System) setBGTurnsSlotState(chars []*Char, slot int, active bool) {
+	team := slot & 1
+	for _, ch := range chars {
+		if ch == nil {
+			continue
+		}
+		if active {
+			ch.teamside = team
+			ch.unsetSCF(SCF_disabled)
+			ch.unsetSCF(SCF_standby)
+			if ch.helperIndex == 0 {
+				ch.controller = slot
+				if s.aiLevel[slot] != 0 {
+					ch.controller ^= -1
+				}
+				// Defensive: the real round initialization will run next, but
+				// never let a promoted preloaded fighter enter as already dead.
+				if ch.life <= 0 {
+					ch.life = Max(1, ch.lifeMax)
+					ch.redLife = ch.life
+				}
+			}
+		} else {
+			ch.teamside = -1
+			ch.setSCF(SCF_disabled)
+			ch.setSCF(SCF_standby)
+			ch.setCtrl(false)
+			if ch.helperIndex == 0 {
+				ch.controller = slot
+			}
+		}
+	}
+}
+
+// Promote the next preloaded Turns member into the active P1/P2 slot after a KO.
+func (s *System) activateNextTurnsFighters() {
+	for team := 0; team < 2; team++ {
+		if s.tmode[team] != TM_Turns || !s.effectiveLoss[team] {
+			continue
+		}
+		nextMember := int(s.wins[team^1])
+		if nextMember < 0 || nextMember >= int(s.numTurns[team]) {
+			continue
+		}
+		dst := team
+		src := nextMember*2 + team
+		if src < 0 || src >= MaxSimul*2 {
+			continue
+		}
+		if src == dst {
+			continue
+		}
+		if len(s.chars[src]) == 0 || s.chars[src][0] == nil {
+			continue
+		}
+		s.removePlayerFromCharList(dst)
+		s.removePlayerFromCharList(src)
+		oldDst, oldSrc := dst, src
+		s.chars[dst], s.chars[src] = s.chars[src], s.chars[dst]
+		s.cgi[dst], s.cgi[src] = s.cgi[src], s.cgi[dst]
+		s.stringPool[dst], s.stringPool[src] = s.stringPool[src], s.stringPool[dst]
+		s.remapCharSlotRefs(s.chars[dst], oldSrc, dst)
+		s.remapCharSlotRefs(s.chars[src], oldDst, src)
+		s.rebindCgiStateOwners(dst)
+		s.rebindCgiStateOwners(src)
+		s.workingChar = nil
+		s.workingState = nil
+		s.setBGTurnsSlotState(s.chars[dst], dst, true)
+		s.setBGTurnsSlotState(s.chars[src], src, false)
+		for _, ch := range s.chars[dst] {
+			if ch != nil {
+				s.charList.add(ch)
+			}
+		}
+		s.charList.enemyNearChanged = true
+	}
+}
+
 func (l *Loader) loadCharacter(pn int, attached bool) int {
 	// Quick abort between expensive steps.
 	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
 		return 0
-	}
-	if !attached && sys.roundsExisted[pn&1] > 0 {
-		return 1
-	}
-	if attached && sys.round != 1 {
-		return 1
 	}
 
 	sys.selMutex.RLock()
@@ -5064,13 +5212,36 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	if l.cancelRequested() || l.state == LS_Cancel || sys.gameEnd {
 		return 0
 	}
+	if attached && sys.round != 1 {
+		return 1
+	}
+	// In BG-loaded turns, losingSide may reset to 0 for a fresh promoted fighter;
+	// don't let the loader reload member 0 into P1/P2.
+	if !attached &&
+		sys.bgLoadingTurns() &&
+		tm == TM_Turns &&
+		sys.round > 1 &&
+		len(sys.chars[pn]) > 0 &&
+		sys.chars[pn][0] != nil {
+		return 1
+	}
+	if !attached && sys.roundsExisted[team] > 0 {
+		return 1
+	}
 	// Get number of selected characters in team
 	memberNo := pn >> 1
 	nsel := len(teamSel)
 
 	// Check if player number is acceptable for selected team mode
 	if !attached {
-		if tm == TM_Simul || tm == TM_Tag {
+		// BG Turns must load all numTurns members.
+		if tm == TM_Turns && sys.bgLoadingTurns() {
+			if memberNo >= int(nTurns) {
+				sys.cgi[pn].states = nil
+				sys.chars[pn] = nil
+				return 1
+			}
+		} else if tm == TM_Simul || tm == TM_Tag {
 			if memberNo >= int(nSim) {
 				sys.cgi[pn].states = nil
 				sys.chars[pn] = nil
@@ -5084,7 +5255,7 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 			return 0
 		}
 
-		if tm == TM_Turns {
+		if tm == TM_Turns && !sys.bgLoadingTurns() {
 			off := int32(0)
 			if sys.sel.gameParams != nil {
 				off = sys.sel.gameParams.TurnsOffset[pn&1]
@@ -5233,6 +5404,9 @@ func (l *Loader) loadCharacter(pn int, attached bool) int {
 	// Commit character to system
 	sys.chars[pn] = make([]*Char, 1)
 	sys.chars[pn][0] = p
+	if !attached && tm == TM_Turns && sys.bgLoadingTurns() {
+		sys.setBGTurnsSlotState(sys.chars[pn], pn, pn < 2)
+	}
 
 	// Load character
 	if !sameChar {
@@ -5570,7 +5744,8 @@ func (l *Loader) load() {
 			tm := sys.tmode[i]
 			sys.selMutex.RUnlock()
 			if !charDone[i+2] && selLen > 0 &&
-				tm != TM_Simul && tm != TM_Tag {
+				tm != TM_Simul && tm != TM_Tag &&
+				!(tm == TM_Turns && sys.bgLoadingTurns()) {
 				for j := i + 2; j < playerSlotsEnd; j += 2 {
 					if !charDone[j] {
 						sys.chars[j] = nil
@@ -5611,7 +5786,8 @@ func (l *Loader) reset() {
 	l.cancelCh = nil
 	l.cancelOnce = sync.Once{}
 	for i := range sys.cgi {
-		if sys.roundsExisted[i&1] == 0 {
+		keepPreloadedTurnsPal := sys.bgLoadingTurns() && sys.round > 1 && sys.tmode[i&1] == TM_Turns
+		if sys.roundsExisted[i&1] == 0 && !keepPreloadedTurnsPal {
 			sys.cgi[i].palno = -1
 		}
 	}
