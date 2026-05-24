@@ -718,9 +718,14 @@ func (f *Fnt) DrawTtf(txt string, x, y, xscl, yscl, rxadd float32, rot Rotation,
 		return
 	}
 
-	if f.ttf != nil {
-		f.ttf.UpdateResolution(int(sys.gameWidth), int(sys.gameHeight))
+	if f.ttf == nil {
+		// On platforms without a TTF backend (wasm js build's LoadFntTtf
+		// is a no-op stub), DrawTtf is a no-op. The engine treats text
+		// as invisible instead of crashing. Real impl lands when the
+		// FontFace API bridge is added.
+		return
 	}
+	f.ttf.UpdateResolution(int(sys.gameWidth), int(sys.gameHeight))
 
 	x += float32(f.offset[0])*xscl + float32(sys.gameWidth-320)/2
 	//y += float32(f.offset[1]-int32(f.Size[1])+1)*yscl + float32(sys.gameHeight-240)

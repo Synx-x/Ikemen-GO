@@ -62,7 +62,19 @@ func normalizeVFSPath(p string) string {
 	p = strings.TrimPrefix(p, "/")
 	// Some engine paths use backslashes from MUGEN-style configs.
 	p = strings.ReplaceAll(p, "\\", "/")
-	return path.Clean(p)
+	// MUGEN historically treats paths case-insensitively (DOS legacy).
+	// Native filesystems on Linux are case-sensitive but the engine's
+	// SearchFile fallback explores variations. For VFS, lower-case all
+	// keys to mimic case-insensitive lookup without scanning the map.
+	return strings.ToLower(path.Clean(p))
+}
+
+// vfsSeed inserts or overwrites a VFS entry. Used by bootEngine to
+// satisfy reads for files the native main() would have created on disk.
+func vfsSeed(p string, data []byte) {
+	vfsMu.Lock()
+	vfsEntries[normalizeVFSPath(p)] = data
+	vfsMu.Unlock()
 }
 
 func vfsLookup(p string) ([]byte, bool) {

@@ -67,6 +67,142 @@ func installVFSLuaLoader(L *lua.LState) {
 	logConsole("[ikemen-wasm] LUA: VFS loader installed at package.loaders[1]")
 }
 
+// installVFSIoOpen overrides Lua's `io.open` with a VFS-backed reader.
+// The native `io.open` calls os.Open under the hood, which can't see
+// the in-memory VFS on wasm. Override returns a Lua table that mimics
+// Lua's file handle (read, lines, close) backed by an engineReadFile
+// byte slice. Writes are silently dropped — wasm has no fs.
+//
+// This is what unblocks main.lua's `f_fileRead` (line 43) and any other
+// Lua code that does `io.open(path)` to load motif files, char lists,
+// stage rosters, options.lua state, etc.
+func installVFSIoOpen(L *lua.LState) {
+	ioTbl, ok := L.GetField(L.Get(lua.EnvironIndex), "io").(*lua.LTable)
+	if !ok {
+		logConsole("[ikemen-wasm] LUA: io table not found, skipping io.open override")
+		return
+	}
+	L.SetField(ioTbl, "open", L.NewFunction(func(L *lua.LState) int {
+		path := L.CheckString(1)
+		// mode := L.OptString(2, "r") — VFS is read-only, ignore mode
+		data, err := engineReadFile(path)
+		if err != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString(err.Error()))
+			return 2
+		}
+		// Build a file-handle-like table with read + close methods.
+		handle := L.NewTable()
+		offset := 0
+		L.SetField(handle, "read", L.NewFunction(func(L *lua.LState) int {
+			// arg 1 is self (the handle); arg 2 is the format
+			format := L.OptString(2, "*l")
+			if format == "*a" || format == "*all" {
+				out := string(data[offset:])
+				offset = len(data)
+				L.Push(lua.LString(out))
+				return 1
+			}
+			if format == "*l" || format == "*L" {
+				// Read one line.
+				start := offset
+				for offset < len(data) && data[offset] != '\n' {
+					offset++
+				}
+				line := string(data[start:offset])
+				if offset < len(data) {
+					offset++ // consume \n
+				}
+				L.Push(lua.LString(line))
+				return 1
+			}
+			if n, ok := L.Get(2).(lua.LNumber); ok {
+				wanted := int(n)
+				if offset+wanted > len(data) {
+					wanted = len(data) - offset
+				}
+				if wanted <= 0 {
+					L.Push(lua.LNil)
+					return 1
+				}
+				out := string(data[offset : offset+wanted])
+				offset += wanted
+				L.Push(lua.LString(out))
+				return 1
+			}
+			L.Push(lua.LNil)
+			return 1
+		}))
+		L.SetField(handle, "close", L.NewFunction(func(L *lua.LState) int {
+			return 0
+		}))
+		L.SetField(handle, "lines", L.NewFunction(func(L *lua.LState) int {
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				if offset >= len(data) {
+					L.Push(lua.LNil)
+					return 1
+				}
+				start := offset
+				for offset < len(data) && data[offset] != '\n' {
+					offset++
+				}
+				line := string(data[start:offset])
+				if offset < len(data) {
+					offset++
+				}
+				L.Push(lua.LString(line))
+				return 1
+			}))
+			return 1
+		}))
+		L.SetField(handle, "seek", L.NewFunction(func(L *lua.LState) int {
+			whence := L.OptString(2, "cur")
+			off := int(L.OptInt(3, 0))
+			switch whence {
+			case "set":
+				offset = off
+			case "cur":
+				offset += off
+			case "end":
+				offset = len(data) + off
+			}
+			if offset < 0 {
+				offset = 0
+			}
+			if offset > len(data) {
+				offset = len(data)
+			}
+			L.Push(lua.LNumber(offset))
+			return 1
+		}))
+		L.Push(handle)
+		return 1
+	}))
+	logConsole("[ikemen-wasm] LUA: io.open overridden to route through VFS")
+}
+
+// installWriteNoops overrides Lua bindings that try to write to disk.
+// wasm has no fs so saves/options/replays/screenshots can't persist
+// without a localStorage bridge. For v1, no-op them so the engine
+// progresses past config save calls without panic. Later we can
+// route to localStorage via a JS bridge.
+//
+// Bindings re-registered: saveGameOption, saveIni, takeScreenshot,
+// f_fileWrite (Lua-side helper that also uses io.open in write mode —
+// already handled by installVFSIoOpen returning nil from io.open for
+// write modes? No — current io.open override always reads. Need to
+// keep write attempts from panicking by short-circuiting saves.)
+func installWriteNoops(L *lua.LState) {
+	noop := L.NewFunction(func(L *lua.LState) int {
+		// Silently consume args; return success.
+		return 0
+	})
+	L.SetGlobal("saveGameOption", noop)
+	L.SetGlobal("saveIni", noop)
+	L.SetGlobal("takeScreenshot", noop)
+	logConsole("[ikemen-wasm] LUA: write paths (saveGameOption/saveIni/takeScreenshot) no-op'd")
+}
+
 // bootEngine is the wasm equivalent of native realMain() up to the point where
 // the engine starts rendering menus. It runs the minimum initialization sequence:
 // ensure config, run initLUTs, loadConfig, then enter the title screen state.
@@ -85,6 +221,12 @@ func bootEngine() error {
 		sys.cmdFlags = make(map[string]string)
 	}
 	sys.cmdFlags["-stats"] = "save/stats.json"
+
+	// Seed bootstrap files into VFS that native main() would have
+	// created via os.MkdirAll + write. On wasm there's no real fs,
+	// so we put placeholder bytes into the VFS so the engine + Lua
+	// io.open calls succeed.
+	vfsSeed("save/stats.json", []byte("{}"))
 
 	// Skip initLUTs — it's in input_sdl.go which is tagged out.
 	// Platform stubs provide empty StringToKeyLUT/StringToButtonLUT.
@@ -143,6 +285,8 @@ func bootEngine() error {
 		// routes through engineReadFile, but try this first to see how
 		// far we get.
 		installVFSLuaLoader(sys.luaLState)
+		installVFSIoOpen(sys.luaLState)
+		installWriteNoops(sys.luaLState)
 		scriptBytes, readErr := engineReadFile(sys.cfg.Config.System)
 		if readErr != nil {
 			luaErr = readErr

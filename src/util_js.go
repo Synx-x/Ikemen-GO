@@ -32,7 +32,13 @@ func ShowErrorDialog(message string) {
 	alert.Invoke("I.K.E.M.E.N Error\n\n" + message)
 }
 
-// TTF font loading stub
+// TTF font loading stub — engine calls this when motif declares
+// Type=TrueType. Real impl would rasterize glyphs via golang.org/x/image
+// or use the FontFace API through a JS bridge. For v1 just no-op so the
+// engine progresses past loadDebugFont. Menus will render any TTF text
+// as blank, bitmap fonts still work, which covers the majority of
+// motif text rendering.
 func LoadFntTtf(f *Fnt, fontfile string, filename string, height int32) {
-	panic(Error("TrueType fonts are not supported on this platform"))
+	// Leave f.Type / f.Size intact so callers don't crash on field reads.
+	// Real glyph atlas + texture upload land in D7.
 }
