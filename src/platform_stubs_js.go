@@ -10,7 +10,6 @@ package main
 import (
 	"fmt"
 	"image"
-	"time"
 )
 
 // ---------------------------------------------------------------------
@@ -147,13 +146,14 @@ func NewModifierKey(ctrl, alt, shift bool) (mod sdlKeymod) {
 // no-op or return canvas defaults until the real DOM canvas bridge lands
 // in D5+. GetSize returns 1280x720 as a sensible default.
 func (w *Window) SwapBuffers() {
-	// Yield to JS event loop. Without this, the Lua main loop holds
-	// the wasm goroutine forever, the browser tab can't respond to
-	// rAF or input, and Playwright/Chrome eventually kills it.
-	// 16ms approximates 60fps; the engine has its own throttle via
-	// fps target but this ensures yields happen even when engine
-	// thinks it has spare time.
-	time.Sleep(16 * time.Millisecond)
+	// The engine's per-frame scheduler in system.go renderFrame()
+	// already calls time.Sleep(diff) before each frame to hit the
+	// configured fps. Adding another sleep here pushes the scheduler
+	// into permanent frameSkip mode, which causes the title-menu
+	// state to drop all queued draws (logo renders, then nothing).
+	// Per-frame yield is not needed on wasm: Go's runtime yields to
+	// the JS event loop on syscall/js calls (every gl.* invocation),
+	// which RenderQuad makes thousands of times per frame.
 }
 func (w *Window) SetIcon(icons []image.Image)                                    {}
 func (w *Window) SetSwapInterval(interval int)                                   {}
