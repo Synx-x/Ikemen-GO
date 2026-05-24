@@ -31,26 +31,83 @@ type Texture_WebGL struct {
 	handle js.Value // WebGL texture object
 }
 
+// WebGL2 format constants for paletted, RGB, RGBA, and HDR textures.
+// Mirror native Texture_GL33.MapInternalFormat: depth=8 → RED,
+// 24 → RGB, 32 → RGBA, 96 → RGB32F, 128 → RGBA32F. Engine sends
+// 1-byte-per-pixel paletted data for depth=8 (most sprites + fonts);
+// uploading as RGBA caused texImage2D to reject the buffer.
+// WebGL2 requires SIZED internalformat per OpenGL ES 3.0 spec table 8.10.
+// Format + type stay unsized. Verified against
+// https://registry.khronos.org/webgl/specs/latest/2.0/#3.7.6
+const (
+	glRED               = 0x1903
+	glRGB               = 0x1907
+	glRGBA              = 0x1908
+	glR8                = 0x8229
+	glRGB8              = 0x8051
+	glRGBA8             = 0x8058
+	glRGB32F            = 0x8815
+	glRGBA32F           = 0x8814
+	glFLOAT             = 0x1406
+	glUNPACK_ALIGNMENT  = 0x0CF5
+	glUNPACK_ROW_LENGTH = 0x0CF2
+)
+
+func texFormatForDepth(depth int32) (internalFormat, format, dtype int) {
+	if depth < 8 {
+		depth = 8
+	}
+	switch depth {
+	case 8:
+		return glR8, glRED, UNSIGNED_BYTE
+	case 24:
+		return glRGB8, glRGB, UNSIGNED_BYTE
+	case 32:
+		return glRGBA8, glRGBA, UNSIGNED_BYTE
+	case 96:
+		return glRGB32F, glRGB, glFLOAT
+	case 128:
+		return glRGBA32F, glRGBA, glFLOAT
+	}
+	return glRGBA8, glRGBA, UNSIGNED_BYTE
+}
+
 // Implement Texture interface
 func (t *Texture_WebGL) SetData(data []byte) {
 	if !t.handle.Truthy() {
 		return
 	}
 
+	internal, fmt, dtype := texFormatForDepth(t.depth)
+
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
+	webglContext.Call("pixelStorei", glUNPACK_ALIGNMENT, 1)
+	webglContext.Call("pixelStorei", glUNPACK_ROW_LENGTH, 0)
 
-	// Upload as RGBA for simplicity
-	uint8Array := js.Global().Get("Uint8Array").New(len(data))
-	js.CopyBytesToJS(uint8Array, data)
+	if len(data) > 0 {
+		var arr js.Value
+		if dtype == glFLOAT {
+			// Floats arrive as []byte (4 bytes per float). View as
+			// Float32Array of len(data)/4 elements.
+			arr = js.Global().Get("Uint8Array").New(len(data))
+			js.CopyBytesToJS(arr, data)
+		} else {
+			arr = js.Global().Get("Uint8Array").New(len(data))
+			js.CopyBytesToJS(arr, data)
+		}
+		webglContext.Call("texImage2D",
+			TEXTURE_2D, 0, internal,
+			int(t.width), int(t.height), 0,
+			fmt, dtype, arr,
+		)
+	} else {
+		webglContext.Call("texImage2D",
+			TEXTURE_2D, 0, internal,
+			int(t.width), int(t.height), 0,
+			fmt, dtype, js.Null(),
+		)
+	}
 
-	webglContext.Call(
-		"texImage2D",
-		TEXTURE_2D, 0, RGBA,
-		int(t.width), int(t.height), 0,
-		RGBA, UNSIGNED_BYTE, uint8Array,
-	)
-
-	// Set min/mag filters
 	filter := NEAREST
 	if t.filter {
 		filter = LINEAR

@@ -10,6 +10,11 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+var (
+	engineStarted   bool
+	engineLastError string
+)
+
 // installVFSLuaLoader prepends a custom searcher to package.loaders so
 // `require("external.script.debug")` resolves against the VFS instead of
 // hitting native os.Open. gopher-lua follows Lua 5.1 semantics where
@@ -321,6 +326,35 @@ func init() {
 				// Bridge not ready yet; retry in 10ms
 			} else {
 				// Bridge is ready; expose bootEngine
+				bridge.Set("bootEngineAsync", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					// Lua main loop never returns. Run engine in goroutine,
+					// return immediately so JS event loop survives.
+					if engineStarted {
+						return js.ValueOf(map[string]interface{}{"ok": true, "alreadyStarted": true})
+					}
+					engineStarted = true
+					go func() {
+						defer func() {
+							if r := recover(); r != nil {
+								logConsole(fmt.Sprintf("[ikemen-wasm] engine goroutine panic: %v", r))
+								engineLastError = fmt.Sprintf("%v", r)
+							}
+						}()
+						if err := bootEngine(); err != nil {
+							engineLastError = err.Error()
+							logConsole("[ikemen-wasm] bootEngine returned err: " + err.Error())
+						} else {
+							logConsole("[ikemen-wasm] bootEngine returned cleanly")
+						}
+					}()
+					return js.ValueOf(map[string]interface{}{"ok": true, "running": true})
+				}))
+				bridge.Set("engineStatus", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					return js.ValueOf(map[string]interface{}{
+						"started": engineStarted,
+						"err":     engineLastError,
+					})
+				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 					if err := bootEngine(); err != nil {
 						return js.ValueOf(map[string]interface{}{"ok": false, "err": err.Error()})
