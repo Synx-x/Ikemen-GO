@@ -3,6 +3,8 @@
 package main
 
 import (
+	"encoding/binary"
+	"math"
 	"syscall/js"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -17,9 +19,55 @@ type Renderer_WebGL struct {
 	currentPalTex   *Texture_WebGL     // Bound palette texture
 	blendEnabled    bool
 	modelviewLoc    js.Value           // uniform location for modelview
+	projectionLoc   js.Value           // uniform location for projection
 	texLoc          js.Value           // uniform location for tex
 	palTexLoc       js.Value           // uniform location for palTex
+	x1x2x4x3Loc     js.Value           // uniform location for sprite scale/flip
+	alphaPodLoc     js.Value           // uniform location for alpha
+	tintLoc         js.Value           // uniform location for tint
+	maskLoc         js.Value           // uniform location for mask
 	shaderReady     bool               // Lazily compiled on first use
+}
+
+// Persistent TypedArray buffer pool to avoid per-call allocations.
+var (
+	tmpArrayBuffer  js.Value
+	tmpUint8Array   js.Value
+	tmpFloat32Array js.Value
+)
+
+func ensureTmpBuffer(byteLen int) {
+	if !tmpArrayBuffer.Truthy() || tmpArrayBuffer.Get("byteLength").Int() < byteLen {
+		cap := 16
+		for cap < byteLen {
+			cap *= 2
+		}
+		tmpArrayBuffer = js.Global().Get("ArrayBuffer").New(cap)
+		tmpUint8Array = js.Global().Get("Uint8Array").New(tmpArrayBuffer)
+		tmpFloat32Array = js.Global().Get("Float32Array").New(tmpArrayBuffer)
+	}
+}
+
+// u8FromBytes copies a byte slice into the temp buffer and returns a Uint8Array view.
+func u8FromBytes(b []byte) js.Value {
+	ensureTmpBuffer(len(b))
+	js.CopyBytesToJS(tmpUint8Array, b)
+	return tmpUint8Array.Call("subarray", 0, len(b))
+}
+
+// f32FromFloats copies float32 values into the temp buffer as little-endian bytes
+// and returns a Float32Array view.
+func f32FromFloats(f []float32) js.Value {
+	byteLen := len(f) * 4
+	ensureTmpBuffer(byteLen)
+	// Pack floats into bytes as little-endian
+	buf := make([]byte, byteLen)
+	for i, v := range f {
+		bits := math.Float32bits(v)
+		binary.LittleEndian.PutUint32(buf[i*4:], bits)
+	}
+	js.CopyBytesToJS(tmpUint8Array, buf)
+	return tmpFloat32Array.Call("subarray", 0, len(f))
 }
 
 type Texture_WebGL struct {
@@ -167,6 +215,10 @@ func logConsole(msg interface{}) {
 	}
 }
 
+func logConsoleAlways(msg interface{}) {
+	js.Global().Get("console").Call("log", msg)
+}
+
 // Renderer_WebGL methods implementing the Renderer interface
 
 func (r *Renderer_WebGL) GetName() string {
@@ -193,9 +245,10 @@ func (r *Renderer_WebGL) compileShaders() {
 		in vec2 position;
 		in vec2 uv;
 		uniform mat4 modelview;
+		uniform mat4 projection;
 		out vec2 vUV;
 		void main() {
-			gl_Position = modelview * vec4(position, 0.0, 1.0);
+			gl_Position = projection * modelview * vec4(position, 0.0, 1.0);
 			vUV = uv;
 		}
 	`)
@@ -215,9 +268,18 @@ func (r *Renderer_WebGL) compileShaders() {
 		in vec2 vUV;
 		uniform sampler2D tex;
 		uniform sampler2D palTex;
+		uniform float alpha;
+		uniform vec3 tint;
+		uniform vec3 mask;
 		out vec4 outColor;
 		void main() {
 			vec4 color = texture(tex, vUV);
+			// Default tint to white if not set (1,1,1)
+			vec3 usecolor_tint = (tint == vec3(0.0)) ? vec3(1.0) : tint;
+			color.rgb *= usecolor_tint;
+			color.a *= alpha;
+			// Only output if alpha > 0
+			if(color.a <= 0.0) discard;
 			outColor = color;
 		}
 	`)
@@ -250,31 +312,35 @@ func (r *Renderer_WebGL) compileShaders() {
 	posLoc := webglContext.Call("getAttribLocation", r.spriteProgram, "position").Int()
 	uvLoc := webglContext.Call("getAttribLocation", r.spriteProgram, "uv").Int()
 	r.modelviewLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "modelview")
+	r.projectionLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "projection")
 	r.texLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "tex")
 	r.palTexLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "palTex")
+	r.alphaPodLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "alpha")
+	r.tintLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "tint")
+	r.maskLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "mask")
 
-	// Create vertex buffer with a unit quad (4 verts: xy + uv interleaved)
+	// Create vertex buffer with a unit quad (4 verts: xy + uv interleaved, stride=16 bytes)
 	vertData := js.Global().Get("Float32Array").New(16)
-	// Vertex 0: (0,0) uv (0,1)
+	// Vertex 0: pos=(0,0) uv=(0,0)
 	vertData.SetIndex(0, 0.0)
 	vertData.SetIndex(1, 0.0)
 	vertData.SetIndex(2, 0.0)
-	vertData.SetIndex(3, 1.0)
-	// Vertex 1: (1,0) uv (1,1)
+	vertData.SetIndex(3, 0.0)
+	// Vertex 1: pos=(1,0) uv=(1,0)
 	vertData.SetIndex(4, 1.0)
 	vertData.SetIndex(5, 0.0)
 	vertData.SetIndex(6, 1.0)
-	vertData.SetIndex(7, 1.0)
-	// Vertex 2: (0,1) uv (0,0)
+	vertData.SetIndex(7, 0.0)
+	// Vertex 2: pos=(0,1) uv=(0,1)
 	vertData.SetIndex(8, 0.0)
 	vertData.SetIndex(9, 1.0)
 	vertData.SetIndex(10, 0.0)
-	vertData.SetIndex(11, 0.0)
-	// Vertex 3: (1,1) uv (1,0)
+	vertData.SetIndex(11, 1.0)
+	// Vertex 3: pos=(1,1) uv=(1,1)
 	vertData.SetIndex(12, 1.0)
 	vertData.SetIndex(13, 1.0)
 	vertData.SetIndex(14, 1.0)
-	vertData.SetIndex(15, 0.0)
+	vertData.SetIndex(15, 1.0)
 
 	r.vertexBuffer = webglContext.Call("createBuffer")
 	webglContext.Call("bindBuffer", ARRAY_BUFFER, r.vertexBuffer)
@@ -306,7 +372,6 @@ func (r *Renderer_WebGL) Close() {
 func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
 	// Guard: if canvas not yet set via setCanvas(), no-op safely.
 	if !webglContext.Truthy() {
-		logConsole("BeginFrame: no webglContext yet, skipping")
 		return
 	}
 
@@ -314,24 +379,14 @@ func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
 	width := webglCanvas.Get("width").Int()
 	height := webglCanvas.Get("height").Int()
 
-	logConsole("BeginFrame: viewport " + js.ValueOf(width).String() + "x" + js.ValueOf(height).String())
-
 	// Set viewport to match canvas
 	webglContext.Call("viewport", 0, 0, width, height)
 
 	// Set clear color to dark warm brown #2a1e14 (0.165, 0.118, 0.078, 1.0)
 	webglContext.Call("clearColor", 0.165, 0.118, 0.078, 1.0)
-	logConsole("BeginFrame: clearColor set")
 
 	// Clear the color buffer
 	webglContext.Call("clear", COLOR_BUFFER_BIT)
-	logConsole("BeginFrame: clear called")
-
-	// Check for GL errors
-	err := webglContext.Call("getError").Int()
-	if err != 0 {
-		logConsole("BeginFrame: GL error " + js.ValueOf(err).String())
-	}
 }
 
 func (r *Renderer_WebGL) EndFrame() {
@@ -360,16 +415,17 @@ func (r *Renderer_WebGL) UnloadCustomSpriteShader(shaderName string) {
 }
 
 func (r *Renderer_WebGL) SetSpritePipeline(shaderName string) {
-	logConsole("SetSpritePipeline called, about to compile")
 	r.compileShaders()
-	logConsole("SetSpritePipeline: shaderReady now " + js.ValueOf(r.shaderReady).String())
-	if r.spriteProgram.Truthy() {
-		logConsole("SetSpritePipeline: using program")
-		webglContext.Call("useProgram", r.spriteProgram)
-		webglContext.Call("bindVertexArray", r.vao)
-	} else {
+	if !r.spriteProgram.Truthy() {
 		logConsole("SetSpritePipeline: spriteProgram not truthy!")
+		return
 	}
+	webglContext.Call("useProgram", r.spriteProgram)
+	webglContext.Call("bindVertexArray", r.vao)
+	// Enable blending for sprites (src=SRC_ALPHA, dst=ONE_MINUS_SRC_ALPHA)
+	webglContext.Call("enable", BLEND)
+	webglContext.Call("blendFunc", SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
+	r.blendEnabled = true
 }
 
 func (r *Renderer_WebGL) SetCustomUniforms(params [16]float32) {
@@ -527,48 +583,76 @@ func (r *Renderer_WebGL) SetUniformI(name string, val int) {
 }
 
 func (r *Renderer_WebGL) SetUniformF(name string, values ...float32) {
-	if r.spriteProgram.Truthy() {
-		loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
-		if !loc.Truthy() {
-			return
-		}
-		switch len(values) {
-		case 1:
-			webglContext.Call("uniform1f", loc, values[0])
-		case 2:
-			webglContext.Call("uniform2f", loc, values[0], values[1])
-		case 3:
-			webglContext.Call("uniform3f", loc, values[0], values[1], values[2])
-		case 4:
-			webglContext.Call("uniform4f", loc, values[0], values[1], values[2], values[3])
-		}
+	if !r.spriteProgram.Truthy() {
+		return
+	}
+	var loc js.Value
+	switch name {
+	case "alpha":
+		loc = r.alphaPodLoc
+	case "tint":
+		loc = r.tintLoc
+	case "mask":
+		loc = r.maskLoc
+	default:
+		loc = webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	}
+	if !loc.Truthy() {
+		return
+	}
+	switch len(values) {
+	case 1:
+		webglContext.Call("uniform1f", loc, values[0])
+	case 2:
+		webglContext.Call("uniform2f", loc, values[0], values[1])
+	case 3:
+		webglContext.Call("uniform3f", loc, values[0], values[1], values[2])
+	case 4:
+		webglContext.Call("uniform4f", loc, values[0], values[1], values[2], values[3])
 	}
 }
 
 func (r *Renderer_WebGL) SetUniformFv(name string, values []float32) {
-	if r.spriteProgram.Truthy() {
-		loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
-		if !loc.Truthy() {
-			return
-		}
-		f32Array := js.Global().Get("Float32Array").New(len(values))
-		for i, v := range values {
-			f32Array.SetIndex(i, v)
-		}
+	if !r.spriteProgram.Truthy() {
+		return
+	}
+	loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	if !loc.Truthy() {
+		return
+	}
+	// Use persistent buffer to avoid per-call allocation
+	f32Array := f32FromFloats(values)
+	switch len(values) {
+	case 1:
 		webglContext.Call("uniform1fv", loc, f32Array)
+	case 2:
+		webglContext.Call("uniform2fv", loc, f32Array)
+	case 3:
+		webglContext.Call("uniform3fv", loc, f32Array)
+	case 4:
+		webglContext.Call("uniform4fv", loc, f32Array)
 	}
 }
 
 func (r *Renderer_WebGL) SetUniformMatrix(name string, value []float32) {
-	if r.spriteProgram.Truthy() {
-		loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
-		if !loc.Truthy() {
-			return
-		}
-		f32Array := js.Global().Get("Float32Array").New(16)
-		for i := 0; i < 16 && i < len(value); i++ {
-			f32Array.SetIndex(i, value[i])
-		}
+	if !r.spriteProgram.Truthy() {
+		return
+	}
+	var loc js.Value
+	switch name {
+	case "modelview":
+		loc = r.modelviewLoc
+	case "projection":
+		loc = r.projectionLoc
+	default:
+		loc = webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	}
+	if !loc.Truthy() {
+		return
+	}
+	// Use persistent buffer for matrix data
+	if len(value) >= 16 {
+		f32Array := f32FromFloats(value[:16])
 		webglContext.Call("uniformMatrix4fv", loc, false, f32Array)
 	}
 }
@@ -583,7 +667,7 @@ func (r *Renderer_WebGL) SetTexture(name string, tex Texture) {
 	}
 
 	unit := 0
-	if name == "palTex" {
+	if name == "palTex" || name == "pal" {
 		unit = 1
 		r.currentPalTex = t
 	} else {
@@ -594,10 +678,15 @@ func (r *Renderer_WebGL) SetTexture(name string, tex Texture) {
 	webglContext.Call("activeTexture", TEXTURE0+unit)
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
 
-	if name == "palTex" {
-		webglContext.Call("uniform1i", r.palTexLoc, unit)
+	// Set the sampler uniform to point to this texture unit
+	if name == "palTex" || name == "pal" {
+		if r.palTexLoc.Truthy() {
+			webglContext.Call("uniform1i", r.palTexLoc, unit)
+		}
 	} else {
-		webglContext.Call("uniform1i", r.texLoc, unit)
+		if r.texLoc.Truthy() {
+			webglContext.Call("uniform1i", r.texLoc, unit)
+		}
 	}
 }
 
@@ -661,13 +750,8 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 	if !webglContext.Truthy() || !r.vertexBuffer.Truthy() {
 		return
 	}
-
-	// Convert float32 slice to JS Float32Array
-	f32Array := js.Global().Get("Float32Array").New(len(values))
-	for i, v := range values {
-		f32Array.SetIndex(i, v)
-	}
-
+	// Use persistent buffer to avoid per-call allocation
+	f32Array := f32FromFloats(values)
 	webglContext.Call("bindBuffer", ARRAY_BUFFER, r.vertexBuffer)
 	webglContext.Call("bufferData", ARRAY_BUFFER, f32Array, DYNAMIC_DRAW)
 }
@@ -682,21 +766,12 @@ func (r *Renderer_WebGL) SetModelIndexData(bufferIndex uint32, values ...uint32)
 
 func (r *Renderer_WebGL) RenderQuad() {
 	if !webglContext.Truthy() || !r.spriteProgram.Truthy() || !r.vao.Truthy() {
-		logConsole("RenderQuad: skipping, not ready")
 		return
 	}
-
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
-	err := webglContext.Call("getError").Int()
-	if err != 0 {
-		logConsole("RenderQuad: pre-draw GL error " + js.ValueOf(err).String())
-	}
-	webglContext.Call("drawArrays", TRIANGLE_STRIP, 0, 4)
-	err = webglContext.Call("getError").Int()
-	if err != 0 {
-		logConsole("RenderQuad: post-draw GL error " + js.ValueOf(err).String())
-	}
+	// Use TRIANGLE_STRIP (5) to draw a quad with 4 vertices (native's mode)
+	webglContext.Call("drawArrays", 5, 0, 4)
 }
 
 func (r *Renderer_WebGL) RenderElements(mode PrimitiveMode, count, offset int) {
