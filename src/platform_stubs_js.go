@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"syscall/js"
 )
 
 // ---------------------------------------------------------------------
@@ -145,15 +146,20 @@ func NewModifierKey(ctrl, alt, shift bool) (mod sdlKeymod) {
 // Window method stubs mirror system_sdl.go's *Window method set. Most
 // no-op or return canvas defaults until the real DOM canvas bridge lands
 // in D5+. GetSize returns 1280x720 as a sensible default.
+// webglFlushCtx is set by render_webgl_state.setWebGLContext after
+// getContext succeeds. SwapBuffers uses it to flush + finish the WebGL
+// command stream so the next BeginFrame clear doesn't wipe pending
+// draws before they reach the compositor.
+var webglFlushCtx js.Value
+
 func (w *Window) SwapBuffers() {
-	// The engine's per-frame scheduler in system.go renderFrame()
-	// already calls time.Sleep(diff) before each frame to hit the
-	// configured fps. Adding another sleep here pushes the scheduler
-	// into permanent frameSkip mode, which causes the title-menu
-	// state to drop all queued draws (logo renders, then nothing).
-	// Per-frame yield is not needed on wasm: Go's runtime yields to
-	// the JS event loop on syscall/js calls (every gl.* invocation),
-	// which RenderQuad makes thousands of times per frame.
+	// Hint the WebGL driver that all batched commands should run NOW.
+	// Browser auto-composites at rAF; flush is sufficient to ensure the
+	// back buffer has the most recent draw state before the engine's
+	// next BeginFrame clears it.
+	if webglFlushCtx.Truthy() {
+		webglFlushCtx.Call("flush")
+	}
 }
 func (w *Window) SetIcon(icons []image.Image)                                    {}
 func (w *Window) SetSwapInterval(interval int)                                   {}
