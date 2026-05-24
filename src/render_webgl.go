@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/binary"
 	"math"
+	"strings"
 	"syscall/js"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -233,6 +234,49 @@ func logConsoleAlways(msg interface{}) {
 	js.Global().Get("console").Call("log", msg)
 }
 
+// stripVulkanBranch removes the Vulkan-specific code path from a shader.
+// The shader uses #if __VERSION__ >= 450 to branch between Vulkan and OpenGL.
+// For WebGL (which is OpenGL ES 3.0), we keep only the OpenGL path.
+func stripVulkanBranch(src string) string {
+	lines := strings.Split(src, "\n")
+	var result []string
+	inVulkanBranch := false
+	depth := 0
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Detect #if __VERSION__ >= 450
+		if strings.Contains(trimmed, "#if") && strings.Contains(trimmed, "__VERSION__") && strings.Contains(trimmed, "450") {
+			inVulkanBranch = true
+			depth++
+			continue
+		}
+
+		// Detect #else
+		if strings.HasPrefix(trimmed, "#else") && inVulkanBranch && depth > 0 {
+			inVulkanBranch = false
+			continue
+		}
+
+		// Detect #endif
+		if strings.HasPrefix(trimmed, "#endif") && depth > 0 {
+			depth--
+			if depth == 0 {
+				inVulkanBranch = false
+			}
+			continue
+		}
+
+		// Add line if not in Vulkan branch
+		if !inVulkanBranch {
+			result = append(result, line)
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
+
 // Renderer_WebGL methods implementing the Renderer interface
 
 func (r *Renderer_WebGL) GetName() string {
@@ -255,8 +299,14 @@ func (r *Renderer_WebGL) compileShaders() {
 	// Prefix for WebGL2 GLSL
 	const wgl2Prefix = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
 
+	// Strip Vulkan-specific code from shader (lines with #if __VERSION__ >= 450)
+	// This shader is designed for both Vulkan (450+) and OpenGL. For WebGL (300 es),
+	// we use the OpenGL path by removing the Vulkan branch.
+	cleanedVert := stripVulkanBranch(vertShader)
+	cleanedFrag := stripVulkanBranch(fragShader)
+
 	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
-	vertShaderSrc := wgl2Prefix + vertShader
+	vertShaderSrc := wgl2Prefix + cleanedVert
 	vertShaderObj := webglContext.Call("createShader", VERTEX_SHADER)
 	webglContext.Call("shaderSource", vertShaderObj, vertShaderSrc)
 	webglContext.Call("compileShader", vertShaderObj)
@@ -270,7 +320,7 @@ func (r *Renderer_WebGL) compileShaders() {
 	}
 
 	// Compile fragment shader (embedded from src/shaders/sprite.frag.glsl)
-	fragShaderSrc := wgl2Prefix + fragShader
+	fragShaderSrc := wgl2Prefix + cleanedFrag
 	fragShaderObj := webglContext.Call("createShader", FRAGMENT_SHADER)
 	webglContext.Call("shaderSource", fragShaderObj, fragShaderSrc)
 	webglContext.Call("compileShader", fragShaderObj)
@@ -865,8 +915,20 @@ func (r *Renderer_WebGL) SetModelIndexData(bufferIndex uint32, values ...uint32)
 
 func (r *Renderer_WebGL) RenderQuad() {
 	if !webglContext.Truthy() || !r.spriteProgram.Truthy() || !r.vao.Truthy() {
+		if verboseRender {
+			reason := "unknownReason"
+			if !webglContext.Truthy() {
+				reason = "noGLContext"
+			} else if !r.spriteProgram.Truthy() {
+				reason = "noSpriteProgram"
+			} else if !r.vao.Truthy() {
+				reason = "noVAO"
+			}
+			logConsole("RenderQuad skipped: " + reason)
+		}
 		return
 	}
+	logConsole("RenderQuad called")
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
 	// Use TRIANGLE_STRIP (5) to draw a quad with 4 vertices (native's mode)
