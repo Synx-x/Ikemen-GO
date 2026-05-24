@@ -68,6 +68,11 @@ const (
 
 	// Blend modes
 	BLEND = 0x0BE2
+
+	// State toggles
+	CULL_FACE    = 0x0B44
+	DEPTH_TEST   = 0x0B71
+	SCISSOR_TEST = 0x0C11
 )
 
 // setWebGLContext stores the canvas and GL context for use by render_webgl.go methods.

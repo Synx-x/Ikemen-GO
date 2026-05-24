@@ -350,11 +350,30 @@ func init() {
 					return js.ValueOf(map[string]interface{}{"ok": true, "running": true})
 				}))
 				bridge.Set("engineStatus", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					rwg, _ := gfx.(*Renderer_WebGL)
+					shaderReady := false
+					vaoReady := false
+					if rwg != nil {
+						shaderReady = rwg.spriteProgram.Truthy()
+						vaoReady = rwg.vao.Truthy()
+					}
+					vlog := make([]interface{}, len(vertexCallLog))
+					for i, s := range vertexCallLog {
+						vlog[i] = s
+					}
 					return js.ValueOf(map[string]interface{}{
 						"started":          engineStarted,
 						"err":              engineLastError,
 						"frameCounter":     int(sys.frameCounter),
 						"storyboardActive": sys.storyboard.active,
+						"renderQuad":       renderQuadCount,
+						"renderQuadSkip":   renderQuadSkipped,
+						"shaderReady":      shaderReady,
+						"vaoReady":         vaoReady,
+						"vertexCallCount":  vertexCallCount,
+						"vertexCallLog":    vlog,
+						"firstProjection":  firstProjection,
+						"firstModelview":   firstModelview,
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {

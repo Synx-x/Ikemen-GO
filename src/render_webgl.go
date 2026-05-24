@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strings"
 	"syscall/js"
@@ -305,6 +306,13 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
+	// DIAGNOSTIC stop-state: magenta-only fragment shader, engine vert shader
+	// untouched. Confirms draw pipeline reaches canvas in top-left 558x299 box.
+	// Root cause of full-screen-fill failure unresolved as of 2026-05-24 — see
+	// docs/retrospective.md entry for findings + next-step bisection plan.
+	cleanedFrag = "in vec2 texcoord;\nout vec4 FragColor;\nvoid main(void) { FragColor = vec4(1.0, 0.0, 1.0, 1.0); }"
+	_ = cleanedVert // engine vert preserved
+
 	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
 	vertShaderSrc := wgl2Prefix + cleanedVert
 	vertShaderObj := webglContext.Call("createShader", VERTEX_SHADER)
@@ -477,6 +485,10 @@ func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
 	width := webglCanvas.Get("width").Int()
 	height := webglCanvas.Get("height").Int()
 	webglContext.Call("viewport", 0, 0, width, height)
+	// Force disable cull + depth so geometry can't be hidden by them.
+	webglContext.Call("disable", CULL_FACE)
+	webglContext.Call("disable", DEPTH_TEST)
+	webglContext.Call("disable", SCISSOR_TEST)
 
 	// Honor the clearColor flag. Engine calls BeginFrame(false) after
 	// motif's storyboard render to PRESERVE the drawn text/menu items
@@ -782,9 +794,25 @@ func (r *Renderer_WebGL) SetUniformFv(name string, values []float32) {
 	}
 }
 
+var firstProjection, firstModelview string
+
 func (r *Renderer_WebGL) SetUniformMatrix(name string, value []float32) {
 	if !r.spriteProgram.Truthy() {
 		return
+	}
+	if len(value) >= 16 {
+		if name == "projection" {
+			copy(lastProjection[:], value[:16])
+			if firstProjection == "" {
+				firstProjection = fmt.Sprintf("%v", value[:16])
+			}
+		}
+		if name == "modelview" {
+			copy(lastModelview[:], value[:16])
+			if firstModelview == "" {
+				firstModelview = fmt.Sprintf("%v", value[:16])
+			}
+		}
 	}
 	var loc js.Value
 	switch name {
@@ -895,14 +923,37 @@ func (r *Renderer_WebGL) SetShadowFrameCubeTexture(i uint32) {
 	// No-op stub
 }
 
+// Diagnostic: capture first N SetVertexData calls verbatim so we can verify
+// engine actually pushes per-quad geometry rather than reusing one rect.
+var vertexCallLog []string
+var vertexCallCount int
+var lastProjection [16]float32
+var lastModelview [16]float32
+
 func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 	if !webglContext.Truthy() || !r.vertexBuffer.Truthy() {
 		return
 	}
-	// Use persistent buffer to avoid per-call allocation
-	f32Array := f32FromFloats(values)
+	if vertexCallCount < 12 {
+		s := ""
+		for i, v := range values {
+			if i > 0 {
+				s += ","
+			}
+			s += fmt.Sprintf("%.1f", v)
+		}
+		s += " | P=" + fmt.Sprintf("%v", lastProjection)
+		s += " | M=" + fmt.Sprintf("%v", lastModelview)
+		vertexCallLog = append(vertexCallLog, s)
+		vertexCallCount++
+	}
+	// Use a FRESH Float32Array per call (avoid persistent-buffer aliasing).
+	fresh := js.Global().Get("Float32Array").New(len(values))
+	for i, v := range values {
+		fresh.SetIndex(i, v)
+	}
 	webglContext.Call("bindBuffer", ARRAY_BUFFER, r.vertexBuffer)
-	webglContext.Call("bufferData", ARRAY_BUFFER, f32Array, DYNAMIC_DRAW)
+	webglContext.Call("bufferData", ARRAY_BUFFER, fresh, DYNAMIC_DRAW)
 }
 
 func (r *Renderer_WebGL) SetModelVertexData(bufferIndex uint32, values []byte) {
@@ -913,26 +964,19 @@ func (r *Renderer_WebGL) SetModelIndexData(bufferIndex uint32, values ...uint32)
 	// No-op stub
 }
 
+// Diagnostic counters; exposed via window.ikemen.drawStats().
+var renderQuadCount int
+var renderQuadSkipped int
+
 func (r *Renderer_WebGL) RenderQuad() {
 	if !webglContext.Truthy() || !r.spriteProgram.Truthy() || !r.vao.Truthy() {
-		if verboseRender {
-			reason := "unknownReason"
-			if !webglContext.Truthy() {
-				reason = "noGLContext"
-			} else if !r.spriteProgram.Truthy() {
-				reason = "noSpriteProgram"
-			} else if !r.vao.Truthy() {
-				reason = "noVAO"
-			}
-			logConsole("RenderQuad skipped: " + reason)
-		}
+		renderQuadSkipped++
 		return
 	}
-	logConsole("RenderQuad called")
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
-	// Use TRIANGLE_STRIP (5) to draw a quad with 4 vertices (native's mode)
 	webglContext.Call("drawArrays", 5, 0, 4)
+	renderQuadCount++
 }
 
 func (r *Renderer_WebGL) RenderElements(mode PrimitiveMode, count, offset int) {
