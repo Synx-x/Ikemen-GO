@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"syscall/js"
 )
 
@@ -168,6 +169,34 @@ func main() {
 			return nil
 		})
 		return promiseCtor.New(executor)
+	}))
+
+	// ikemen.loadAssetBundle(uint8Array) — loads a zip-backed asset bundle into the VFS.
+	// Called from JS after fetching the asset bundle. Returns {ok: true, entries: count}
+	// on success or {ok: false, err: "message"} on failure.
+	bridge.Set("loadAssetBundle", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 1 {
+			return js.ValueOf(map[string]interface{}{"ok": false, "err": "no args"})
+		}
+		u8 := args[0]
+		n := u8.Get("length").Int()
+		buf := make([]byte, n)
+		js.CopyBytesToGo(buf, u8)
+		loaded, err := LoadAssetZip(buf)
+		if err != nil {
+			logConsole("[ikemen-wasm] LoadAssetZip failed: " + err.Error())
+			return js.ValueOf(map[string]interface{}{"ok": false, "err": err.Error()})
+		}
+		logConsole(fmt.Sprintf("[ikemen-wasm] VFS loaded: %d entries", loaded))
+		return js.ValueOf(map[string]interface{}{"ok": true, "entries": loaded})
+	}))
+
+	// ikemen.vfsHas(path) — check if a path exists in the loaded VFS. Returns bool.
+	bridge.Set("vfsHas", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 1 {
+			return false
+		}
+		return VFSHas(args[0].String())
 	}))
 
 	js.Global().Set("ikemen", bridge)

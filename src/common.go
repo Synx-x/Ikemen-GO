@@ -429,7 +429,7 @@ func FileExist(filename string) string {
 	isZip, zipFilePath, pathInZip := IsZipPath(filename)
 	if isZip {
 		var actualZipFilePathOnDisk string
-		info, err := os.Stat(zipFilePath)
+		info, err := engineStat(zipFilePath)
 		if err == nil && !info.IsDir() {
 
 			actualZipFilePathOnDisk = zipFilePath
@@ -448,7 +448,7 @@ func FileExist(filename string) string {
 			matches, _ := filepath.Glob(pattern)
 			if len(matches) > 0 {
 				// Ensure the found match is not a directory
-				infoMatch, errMatch := os.Stat(matches[0])
+				infoMatch, errMatch := engineStat(matches[0])
 				if errMatch == nil && !infoMatch.IsDir() {
 					actualZipFilePathOnDisk = matches[0]
 				} else {
@@ -486,7 +486,7 @@ func FileExist(filename string) string {
 		}
 		return "" // File not found in zip
 	}
-	if info, err := os.Stat(filename); !os.IsNotExist(err) {
+	if info, err := engineStat(filename); !os.IsNotExist(err) {
 		if info == nil || info.IsDir() {
 			return ""
 		}
@@ -504,7 +504,7 @@ func FileExist(filename string) string {
 		}
 	}
 	if m, _ := filepath.Glob(pattern); len(m) > 0 {
-		info, _ := os.Stat(m[0])
+		info, _ := engineStat(m[0])
 		if info != nil && !info.IsDir() {
 			return filepath.ToSlash(m[0])
 		}
@@ -1645,7 +1645,7 @@ func OpenFile(filename string) (io.ReadSeekCloser, error) {
 	if isZip {
 		zr, err := zip.OpenReader(zipFilePath)
 		if err != nil {
-			f, err2 := os.Open(filename)
+			f, err2 := engineOpen(filename)
 			if err2 != nil {
 				return nil, fmt.Errorf("opening zip archive %s: %w", zipFilePath, err)
 			}
@@ -1694,7 +1694,7 @@ func OpenFile(filename string) (io.ReadSeekCloser, error) {
 	}
 
 	// Not a zip path, open as a normal file
-	f, err := os.Open(filename)
+	f, err := engineOpen(filename)
 	if err != nil {
 		return nil, err
 	}

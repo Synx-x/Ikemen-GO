@@ -424,24 +424,24 @@ func (s *System) init(w, h int32) *lua.LState {
 
 			if strings.HasPrefix(renderName, "OpenGL") {
 				// Load vert shaders.
-				s.externalShaders[0][i], err = os.ReadFile(shaderLocation + ".vert")
+				s.externalShaders[0][i], err = engineReadFile(shaderLocation + ".vert")
 				if err != nil {
 					chk(err)
 				}
 
 				// Load frag shaders.
-				s.externalShaders[1][i], err = os.ReadFile(shaderLocation + ".frag")
+				s.externalShaders[1][i], err = engineReadFile(shaderLocation + ".frag")
 				if err != nil {
 					chk(err)
 				}
 			} else if strings.HasPrefix(renderName, "Vulkan") {
 				// Load spv shaders
-				s.externalShaders[0][i], err = os.ReadFile(shaderLocation + ".vert.spv")
+				s.externalShaders[0][i], err = engineReadFile(shaderLocation + ".vert.spv")
 				if err != nil {
 					chk(err)
 				}
 
-				s.externalShaders[1][i], err = os.ReadFile(shaderLocation + ".frag.spv")
+				s.externalShaders[1][i], err = engineReadFile(shaderLocation + ".frag.spv")
 				if err != nil {
 					chk(err)
 				}
@@ -493,7 +493,7 @@ func (s *System) init(w, h int32) *lua.LState {
 			s.windowMainIcon = make([]image.Image, len(s.cfg.Config.WindowIcon))
 			// And then we load them.
 			for i, iconLocation := range s.cfg.Config.WindowIcon {
-				f[i], err = os.Open(iconLocation)
+				f[i], err = engineOpen(iconLocation)
 				if err != nil {
 					var dErr = "Icon file can not be found.\nPanic: " + err.Error()
 					ShowErrorDialog(dErr)

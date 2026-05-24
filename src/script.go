@@ -4038,7 +4038,7 @@ func systemScriptInit(l *lua.LState) {
 		function jsonDecode(path) end*/
 		path := strArg(l, 1)
 
-		f, err := os.Open(path)
+		f, err := engineOpen(path)
 		if err != nil {
 			l.RaiseError("jsonDecode: open %s: %v", path, err)
 			return 0

@@ -1477,7 +1477,7 @@ func reserveUserFontSlots(m *Motif) {
 
 // returns a stable-sorted list of files named "+system.def" located anywhere under the given root (e.g. external/mods), including nested subdirs.
 func findExternalModSystemDefs(root string) ([]string, error) {
-	st, err := os.Stat(root)
+	st, err := engineStat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -5557,7 +5557,7 @@ func (hi *MotifHiscore) finalizeAndSave() {
 		hi.haveSaved = true
 		return
 	}
-	data, err := os.ReadFile(sys.cmdFlags["-stats"])
+	data, err := engineReadFile(sys.cmdFlags["-stats"])
 	if err != nil {
 		fmt.Println("hiscore: cannot read save/stats.json for name save:", err)
 		hi.haveSaved = true
@@ -5676,7 +5676,7 @@ func parseRankingRows(path, mode string) []rankingRow {
 	if path == "" || mode == "" {
 		return nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := engineReadFile(path)
 	if err != nil {
 		fmt.Println("hiscore: read stats.json failed:", err)
 		return nil

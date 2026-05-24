@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sync"
 
 
@@ -533,7 +532,7 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 }
 
 func loadSoundFont(filename string) (*MidiSoundFont, error) {
-	f, err := os.Open(filename)
+	f, err := engineOpen(filename)
 	if err != nil {
 		return nil, err
 	}

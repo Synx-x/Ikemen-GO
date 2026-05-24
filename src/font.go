@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/binary"
 	"math"
-	"os"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -149,7 +148,7 @@ func loadFntV1(filename string) (*Fnt, error) {
 	f := newFnt()
 	f.images[0] = make(map[rune]*FntCharImage)
 
-	fp, err := os.Open(filename)
+	fp, err := engineOpen(filename)
 
 	if err != nil {
 		return nil, Error("File not found")

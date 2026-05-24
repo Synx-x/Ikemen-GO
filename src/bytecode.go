@@ -11978,7 +11978,7 @@ func (sc loadFile) Run(c *Char, _ []int32) bool {
 		return true
 	})
 	if path != "" {
-		decodeFile, err := os.Open(filepath.Dir(c.gi().def) + "/" + path)
+		decodeFile, err := engineOpen(filepath.Dir(c.gi().def) + "/" + path)
 		if err != nil {
 			defer decodeFile.Close()
 			return false

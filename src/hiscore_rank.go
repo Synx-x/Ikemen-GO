@@ -204,7 +204,7 @@ func rankingWouldPlace(mode string) bool {
 		return true
 	}
 
-	data, err := os.ReadFile(sys.cmdFlags["-stats"])
+	data, err := engineReadFile(sys.cmdFlags["-stats"])
 	if err != nil || len(data) == 0 {
 		return true
 	}
@@ -301,7 +301,7 @@ func computeAndSaveRanking(mode string) (bool, int32) {
 	cleared := modeCleared(mode, len(sys.statsLog.Matches))
 
 	// Read or create stats file
-	data, _ := os.ReadFile(sys.cmdFlags["-stats"])
+	data, _ := engineReadFile(sys.cmdFlags["-stats"])
 	if len(data) == 0 {
 		data = []byte(`{}`)
 	}

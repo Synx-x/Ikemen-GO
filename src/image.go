@@ -697,7 +697,7 @@ func newSprite() *Sprite {
 /*
 	func loadFromSff(filename string, g, n int16) (*Sprite, error) {
 		s := newSprite()
-		f, err := os.Open(filename)
+		f, err := engineOpen(filename)
 		if err != nil {
 			return nil, err
 		}
@@ -2149,7 +2149,7 @@ func captureScreen() {
 
 	for i := sys.captureNum; i < 999; i++ {
 		filename := fmt.Sprintf("%s%s%03d.png", sys.cfg.Config.ScreenshotFolder, safeTitle, i)
-		if _, err := os.Stat(filename); os.IsNotExist(err) {
+		if _, err := engineStat(filename); os.IsNotExist(err) {
 			file, _ := os.Create(filename)
 			defer file.Close()
 			png.Encode(file, img)

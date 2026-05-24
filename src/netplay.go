@@ -792,7 +792,7 @@ func writeReplayHeader(w io.Writer, header *ReplayHeader) error {
 	return err
 }
 
-func readReplayHeader(f *os.File) (*ReplayHeader, error) {
+func readReplayHeader(f io.ReadSeeker) (*ReplayHeader, error) {
 	if f == nil {
 		return nil, nil
 	}
@@ -835,7 +835,7 @@ func readReplayHeader(f *os.File) (*ReplayHeader, error) {
 }
 
 type ReplayFile struct {
-	file               *os.File
+	file io.ReadSeekCloser
 	ibit               [REPLAY_NUM_INPUTS]InputBits
 	iaxes              [REPLAY_NUM_INPUTS][6]int8
 	preMatchTime       int32
@@ -846,7 +846,7 @@ type ReplayFile struct {
 }
 
 func OpenReplayFile(filename string) *ReplayFile {
-	rf, err := os.Open(filename)
+	rf, err := engineOpen(filename)
 	if err != nil {
 		log.Printf("Failed to open replay file %s: %v", filename, err)
 		return nil
