@@ -274,12 +274,12 @@ func (r *Renderer_WebGL) compileShaders() {
 		out vec4 outColor;
 		void main() {
 			vec4 color = texture(tex, vUV);
-			// Default tint to white if not set (1,1,1)
-			vec3 usecolor_tint = (tint == vec3(0.0)) ? vec3(1.0) : tint;
-			color.rgb *= usecolor_tint;
-			color.a *= alpha;
-			// Only output if alpha > 0
-			if(color.a <= 0.0) discard;
+			// Apply tint (default to white if not set)
+			vec3 use_tint = (tint == vec3(0.0)) ? vec3(1.0) : tint;
+			color.rgb *= use_tint;
+			// Apply alpha (use 1.0 if alpha not explicitly set)
+			float use_alpha = (alpha == 0.0) ? 1.0 : alpha;
+			color.a *= use_alpha;
 			outColor = color;
 		}
 	`)
