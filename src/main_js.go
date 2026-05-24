@@ -143,6 +143,33 @@ func main() {
 		return result
 	}))
 
+	// ikemen.fetchAsset(path) — returns a Promise that resolves to a Uint8Array
+	// containing the asset bytes. Used by the engine (or test harness) to read
+	// chars, stages, data files served by Vite under /assets/.
+	bridge.Set("fetchAsset", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 1 {
+			return js.Undefined()
+		}
+		path := args[0].String()
+		promiseCtor := js.Global().Get("Promise")
+		executor := js.FuncOf(func(this js.Value, pa []js.Value) interface{} {
+			resolve := pa[0]
+			reject := pa[1]
+			go func() {
+				data, err := FetchAsset(path)
+				if err != nil {
+					reject.Invoke(err.Error())
+					return
+				}
+				dst := js.Global().Get("Uint8Array").New(len(data))
+				js.CopyBytesToJS(dst, data)
+				resolve.Invoke(dst)
+			}()
+			return nil
+		})
+		return promiseCtor.New(executor)
+	}))
+
 	js.Global().Set("ikemen", bridge)
 	logConsole("[ikemen-wasm] JS bridge ready as window.ikemen")
 
