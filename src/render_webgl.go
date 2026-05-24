@@ -21,11 +21,19 @@ type Renderer_WebGL struct {
 	modelviewLoc    js.Value           // uniform location for modelview
 	projectionLoc   js.Value           // uniform location for projection
 	texLoc          js.Value           // uniform location for tex
-	palTexLoc       js.Value           // uniform location for palTex
-	x1x2x4x3Loc     js.Value           // uniform location for sprite scale/flip
-	alphaPodLoc     js.Value           // uniform location for alpha
+	palTexLoc       js.Value           // uniform location for pal
+	x1x2x4x3Loc     js.Value           // uniform location for x1x2x4x3
 	tintLoc         js.Value           // uniform location for tint
+	addLoc          js.Value           // uniform location for add
+	multLoc         js.Value           // uniform location for mult
+	alphaPodLoc     js.Value           // uniform location for alpha
+	grayLoc         js.Value           // uniform location for gray
+	hueLoc          js.Value           // uniform location for hue
 	maskLoc         js.Value           // uniform location for mask
+	isFlatLoc       js.Value           // uniform location for isFlat
+	isRgbaLoc       js.Value           // uniform location for isRgba
+	isTrapezLoc     js.Value           // uniform location for isTrapez
+	negLoc          js.Value           // uniform location for neg
 	shaderReady     bool               // Lazily compiled on first use
 }
 
@@ -131,6 +139,10 @@ func (t *Texture_WebGL) SetData(data []byte) {
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
 	webglContext.Call("pixelStorei", glUNPACK_ALIGNMENT, 1)
 	webglContext.Call("pixelStorei", glUNPACK_ROW_LENGTH, 0)
+	// Disable Y-flip on texture upload. WebGL default is flip=true (top-down),
+	// but MUGEN sprites are bottom-up like OpenGL.
+	const glUNPACK_FLIP_Y_WEBGL = 0x9240
+	webglContext.Call("pixelStorei", glUNPACK_FLIP_Y_WEBGL, 0)
 
 	if len(data) > 0 {
 		var arr js.Value
@@ -156,8 +168,10 @@ func (t *Texture_WebGL) SetData(data []byte) {
 		)
 	}
 
+	// For paletted (depth=8) textures, MUST use NEAREST to avoid interpolating
+	// palette indices. Linear filtering on R8 produces wrong colors.
 	filter := NEAREST
-	if t.filter {
+	if t.filter && t.depth != 8 {
 		filter = LINEAR
 	}
 	webglContext.Call("texParameteri", TEXTURE_2D, TEXTURE_MIN_FILTER, filter)
@@ -227,6 +241,7 @@ func (r *Renderer_WebGL) GetName() string {
 
 func (r *Renderer_WebGL) Init() {
 	logConsole("Init: WebGL renderer ready, shader will compile on first use")
+	// Safe defaults will be set when shader compiles
 }
 
 func (r *Renderer_WebGL) compileShaders() {
@@ -235,89 +250,79 @@ func (r *Renderer_WebGL) compileShaders() {
 		return
 	}
 
-	logConsole("compileShaders: starting compilation")
+	logConsole("compileShaders: starting compilation with embedded shaders")
 
-	// Compile vertex shader
-	vertShader := webglContext.Call("createShader", VERTEX_SHADER)
-	webglContext.Call("shaderSource", vertShader, `
-		#version 300 es
-		precision highp float;
-		in vec2 position;
-		in vec2 uv;
-		uniform mat4 modelview;
-		uniform mat4 projection;
-		out vec2 vUV;
-		void main() {
-			gl_Position = projection * modelview * vec4(position, 0.0, 1.0);
-			vUV = uv;
-		}
-	`)
-	webglContext.Call("compileShader", vertShader)
+	// Prefix for WebGL2 GLSL
+	const wgl2Prefix = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
 
-	if !webglContext.Call("getShaderParameter", vertShader, COMPILE_STATUS).Bool() {
-		log := webglContext.Call("getShaderInfoLog", vertShader).String()
-		logConsole("Vertex shader compile error: " + log)
+	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
+	vertShaderSrc := wgl2Prefix + vertShader
+	vertShaderObj := webglContext.Call("createShader", VERTEX_SHADER)
+	webglContext.Call("shaderSource", vertShaderObj, vertShaderSrc)
+	webglContext.Call("compileShader", vertShaderObj)
+
+	vertStatus := webglContext.Call("getShaderParameter", vertShaderObj, COMPILE_STATUS)
+	if !vertStatus.Truthy() || !vertStatus.Bool() {
+		log := webglContext.Call("getShaderInfoLog", vertShaderObj).String()
+		logConsole("SHADER COMPILE ERROR (vertex): " + log)
+		logConsoleAlways("SHADER COMPILE ERROR (vertex): " + log)
 		return
 	}
 
-	// Compile fragment shader
-	fragShader := webglContext.Call("createShader", FRAGMENT_SHADER)
-	webglContext.Call("shaderSource", fragShader, `
-		#version 300 es
-		precision highp float;
-		in vec2 vUV;
-		uniform sampler2D tex;
-		uniform sampler2D palTex;
-		uniform float alpha;
-		uniform vec3 tint;
-		uniform vec3 mask;
-		out vec4 outColor;
-		void main() {
-			vec4 color = texture(tex, vUV);
-			// Apply tint (default to white if not set)
-			vec3 use_tint = (tint == vec3(0.0)) ? vec3(1.0) : tint;
-			color.rgb *= use_tint;
-			// Apply alpha (use 1.0 if alpha not explicitly set)
-			float use_alpha = (alpha == 0.0) ? 1.0 : alpha;
-			color.a *= use_alpha;
-			outColor = color;
-		}
-	`)
-	webglContext.Call("compileShader", fragShader)
+	// Compile fragment shader (embedded from src/shaders/sprite.frag.glsl)
+	fragShaderSrc := wgl2Prefix + fragShader
+	fragShaderObj := webglContext.Call("createShader", FRAGMENT_SHADER)
+	webglContext.Call("shaderSource", fragShaderObj, fragShaderSrc)
+	webglContext.Call("compileShader", fragShaderObj)
 
-	if !webglContext.Call("getShaderParameter", fragShader, COMPILE_STATUS).Bool() {
-		log := webglContext.Call("getShaderInfoLog", fragShader).String()
-		logConsole("Fragment shader compile error: " + log)
+	fragStatus := webglContext.Call("getShaderParameter", fragShaderObj, COMPILE_STATUS)
+	if !fragStatus.Truthy() || !fragStatus.Bool() {
+		log := webglContext.Call("getShaderInfoLog", fragShaderObj).String()
+		logConsole("SHADER COMPILE ERROR (fragment): " + log)
+		logConsoleAlways("SHADER COMPILE ERROR (fragment): " + log)
 		return
 	}
 
 	// Link program
 	r.spriteProgram = webglContext.Call("createProgram")
-	webglContext.Call("attachShader", r.spriteProgram, vertShader)
-	webglContext.Call("attachShader", r.spriteProgram, fragShader)
+	webglContext.Call("attachShader", r.spriteProgram, vertShaderObj)
+	webglContext.Call("attachShader", r.spriteProgram, fragShaderObj)
 	webglContext.Call("linkProgram", r.spriteProgram)
 
-	if !webglContext.Call("getProgramParameter", r.spriteProgram, LINK_STATUS).Bool() {
+	linkStatus := webglContext.Call("getProgramParameter", r.spriteProgram, LINK_STATUS)
+	if !linkStatus.Truthy() || !linkStatus.Bool() {
 		log := webglContext.Call("getProgramInfoLog", r.spriteProgram).String()
-		logConsole("Program link error: " + log)
+		logConsole("PROGRAM LINK ERROR: " + log)
+		logConsoleAlways("PROGRAM LINK ERROR: " + log)
 		return
 	}
 
 	logConsole("compileShaders: shader linked successfully")
 
-	webglContext.Call("deleteShader", vertShader)
-	webglContext.Call("deleteShader", fragShader)
+	webglContext.Call("deleteShader", vertShaderObj)
+	webglContext.Call("deleteShader", fragShaderObj)
 
-	// Get attribute and uniform locations
+	// Get attribute locations
 	posLoc := webglContext.Call("getAttribLocation", r.spriteProgram, "position").Int()
 	uvLoc := webglContext.Call("getAttribLocation", r.spriteProgram, "uv").Int()
+
+	// Get all uniform locations required by the real engine shaders
 	r.modelviewLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "modelview")
 	r.projectionLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "projection")
 	r.texLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "tex")
-	r.palTexLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "palTex")
-	r.alphaPodLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "alpha")
+	r.palTexLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "pal")
+	r.x1x2x4x3Loc = webglContext.Call("getUniformLocation", r.spriteProgram, "x1x2x4x3")
 	r.tintLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "tint")
+	r.addLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "add")
+	r.multLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "mult")
+	r.alphaPodLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "alpha")
+	r.grayLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "gray")
+	r.hueLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "hue")
 	r.maskLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "mask")
+	r.isFlatLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "isFlat")
+	r.isRgbaLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "isRgba")
+	r.isTrapezLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "isTrapez")
+	r.negLoc = webglContext.Call("getUniformLocation", r.spriteProgram, "neg")
 
 	// Create vertex buffer with a unit quad (4 verts: xy + uv interleaved, stride=16 bytes)
 	vertData := js.Global().Get("Float32Array").New(16)
@@ -361,8 +366,53 @@ func (r *Renderer_WebGL) compileShaders() {
 
 	webglContext.Call("bindVertexArray", js.Null())
 
+	// Set safe defaults for uniforms so uninitialized values don't garbage output
+	webglContext.Call("useProgram", r.spriteProgram)
+
+	// Bool uniforms default to false (0)
+	if r.isFlatLoc.Truthy() {
+		webglContext.Call("uniform1i", r.isFlatLoc, 0)
+	}
+	if r.isRgbaLoc.Truthy() {
+		webglContext.Call("uniform1i", r.isRgbaLoc, 0)
+	}
+	if r.isTrapezLoc.Truthy() {
+		webglContext.Call("uniform1i", r.isTrapezLoc, 0)
+	}
+	if r.negLoc.Truthy() {
+		webglContext.Call("uniform1i", r.negLoc, 0)
+	}
+	if r.maskLoc.Truthy() {
+		webglContext.Call("uniform1i", r.maskLoc, 0)
+	}
+
+	// Float uniforms
+	if r.alphaPodLoc.Truthy() {
+		webglContext.Call("uniform1f", r.alphaPodLoc, 1.0)
+	}
+	if r.grayLoc.Truthy() {
+		webglContext.Call("uniform1f", r.grayLoc, 0.0)
+	}
+	if r.hueLoc.Truthy() {
+		webglContext.Call("uniform1f", r.hueLoc, 0.0)
+	}
+
+	// Vector uniforms
+	if r.tintLoc.Truthy() {
+		webglContext.Call("uniform4f", r.tintLoc, 0.0, 0.0, 0.0, 0.0)
+	}
+	if r.addLoc.Truthy() {
+		webglContext.Call("uniform3f", r.addLoc, 0.0, 0.0, 0.0)
+	}
+	if r.multLoc.Truthy() {
+		webglContext.Call("uniform3f", r.multLoc, 1.0, 1.0, 1.0)
+	}
+	if r.x1x2x4x3Loc.Truthy() {
+		webglContext.Call("uniform4f", r.x1x2x4x3Loc, 0.0, 0.0, 0.0, 0.0)
+	}
+
 	r.shaderReady = true
-	logConsole("compileShaders: VAO and buffers ready")
+	logConsole("compileShaders: VAO, buffers, and safe defaults ready")
 }
 
 func (r *Renderer_WebGL) Close() {
@@ -422,6 +472,18 @@ func (r *Renderer_WebGL) SetSpritePipeline(shaderName string) {
 	}
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
+
+	// Bind both texture units and set sampler uniforms to match
+	// Sampler 0 = sprite texture, Sampler 1 = palette texture
+	webglContext.Call("activeTexture", TEXTURE0)
+	if r.texLoc.Truthy() {
+		webglContext.Call("uniform1i", r.texLoc, 0)
+	}
+	webglContext.Call("activeTexture", TEXTURE1)
+	if r.palTexLoc.Truthy() {
+		webglContext.Call("uniform1i", r.palTexLoc, 1)
+	}
+
 	// Enable blending for sprites (src=SRC_ALPHA, dst=ONE_MINUS_SRC_ALPHA)
 	webglContext.Call("enable", BLEND)
 	webglContext.Call("blendFunc", SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
@@ -574,11 +636,27 @@ func (r *Renderer_WebGL) DisableScissor() {
 }
 
 func (r *Renderer_WebGL) SetUniformI(name string, val int) {
-	if r.spriteProgram.Truthy() {
-		loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
-		if loc.Truthy() {
-			webglContext.Call("uniform1i", loc, val)
-		}
+	if !r.spriteProgram.Truthy() {
+		return
+	}
+	var loc js.Value
+	// Cache frequently-used bool uniforms for faster lookup
+	switch name {
+	case "isFlat":
+		loc = r.isFlatLoc
+	case "isRgba":
+		loc = r.isRgbaLoc
+	case "isTrapez":
+		loc = r.isTrapezLoc
+	case "neg":
+		loc = r.negLoc
+	case "mask":
+		loc = r.maskLoc
+	default:
+		loc = webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	}
+	if loc.Truthy() {
+		webglContext.Call("uniform1i", loc, val)
 	}
 }
 
@@ -592,8 +670,16 @@ func (r *Renderer_WebGL) SetUniformF(name string, values ...float32) {
 		loc = r.alphaPodLoc
 	case "tint":
 		loc = r.tintLoc
-	case "mask":
-		loc = r.maskLoc
+	case "add":
+		loc = r.addLoc
+	case "mult":
+		loc = r.multLoc
+	case "gray":
+		loc = r.grayLoc
+	case "hue":
+		loc = r.hueLoc
+	case "x1x2x4x3":
+		loc = r.x1x2x4x3Loc
 	default:
 		loc = webglContext.Call("getUniformLocation", r.spriteProgram, name)
 	}
@@ -616,7 +702,19 @@ func (r *Renderer_WebGL) SetUniformFv(name string, values []float32) {
 	if !r.spriteProgram.Truthy() {
 		return
 	}
-	loc := webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	var loc js.Value
+	switch name {
+	case "tint":
+		loc = r.tintLoc
+	case "add":
+		loc = r.addLoc
+	case "mult":
+		loc = r.multLoc
+	case "x1x2x4x3":
+		loc = r.x1x2x4x3Loc
+	default:
+		loc = webglContext.Call("getUniformLocation", r.spriteProgram, name)
+	}
 	if !loc.Truthy() {
 		return
 	}
@@ -675,10 +773,11 @@ func (r *Renderer_WebGL) SetTexture(name string, tex Texture) {
 		r.currentTexture = t
 	}
 
+	// Bind texture to the correct unit and set sampler uniform to point to it
 	webglContext.Call("activeTexture", TEXTURE0+unit)
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
 
-	// Set the sampler uniform to point to this texture unit
+	// Set the sampler uniform to point to this texture unit (sprite sampler = 0, palette sampler = 1)
 	if name == "palTex" || name == "pal" {
 		if r.palTexLoc.Truthy() {
 			webglContext.Call("uniform1i", r.palTexLoc, unit)
