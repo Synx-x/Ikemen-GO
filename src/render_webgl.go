@@ -74,11 +74,38 @@ func (r *Renderer_WebGL) Close() {
 }
 
 func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
-	logConsole("Renderer_WebGL.BeginFrame called")
+	// Guard: if canvas not yet set via setCanvas(), no-op safely.
+	if !webglContext.Truthy() {
+		logConsole("BeginFrame: no webglContext yet, skipping")
+		return
+	}
+
+	// Get canvas dimensions
+	width := webglCanvas.Get("width").Int()
+	height := webglCanvas.Get("height").Int()
+
+	logConsole("BeginFrame: viewport " + js.ValueOf(width).String() + "x" + js.ValueOf(height).String())
+
+	// Set viewport to match canvas
+	webglContext.Call("viewport", 0, 0, width, height)
+
+	// Set clear color to dark warm brown #2a1e14 (0.165, 0.118, 0.078, 1.0)
+	webglContext.Call("clearColor", 0.165, 0.118, 0.078, 1.0)
+	logConsole("BeginFrame: clearColor set")
+
+	// Clear the color buffer
+	webglContext.Call("clear", COLOR_BUFFER_BIT)
+	logConsole("BeginFrame: clear called")
+
+	// Check for GL errors
+	err := webglContext.Call("getError").Int()
+	if err != 0 {
+		logConsole("BeginFrame: GL error " + js.ValueOf(err).String())
+	}
 }
 
 func (r *Renderer_WebGL) EndFrame() {
-	logConsole("Renderer_WebGL.EndFrame called")
+	// No-op stub for now
 }
 
 func (r *Renderer_WebGL) Await() {
