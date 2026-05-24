@@ -470,23 +470,23 @@ func (r *Renderer_WebGL) Close() {
 }
 
 func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
-	// Guard: if canvas not yet set via setCanvas(), no-op safely.
 	if !webglContext.Truthy() {
 		return
 	}
 
-	// Get canvas dimensions
 	width := webglCanvas.Get("width").Int()
 	height := webglCanvas.Get("height").Int()
-
-	// Set viewport to match canvas
 	webglContext.Call("viewport", 0, 0, width, height)
 
-	// Set clear color to dark warm brown #2a1e14 (0.165, 0.118, 0.078, 1.0)
-	webglContext.Call("clearColor", 0.165, 0.118, 0.078, 1.0)
-
-	// Clear the color buffer
-	webglContext.Call("clear", COLOR_BUFFER_BIT)
+	// Honor the clearColor flag. Engine calls BeginFrame(false) after
+	// motif's storyboard render to PRESERVE the drawn text/menu items
+	// for the outer renderFrame loop (motif.go:2774). Unconditional
+	// clear wiped menu draws between layers, causing menu items to
+	// flash visible then vanish.
+	if clearColor {
+		webglContext.Call("clearColor", 0.0, 0.0, 0.0, 1.0)
+		webglContext.Call("clear", COLOR_BUFFER_BIT)
+	}
 }
 
 func (r *Renderer_WebGL) EndFrame() {
