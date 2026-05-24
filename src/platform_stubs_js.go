@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"time"
 )
 
 // ---------------------------------------------------------------------
@@ -145,7 +146,15 @@ func NewModifierKey(ctrl, alt, shift bool) (mod sdlKeymod) {
 // Window method stubs mirror system_sdl.go's *Window method set. Most
 // no-op or return canvas defaults until the real DOM canvas bridge lands
 // in D5+. GetSize returns 1280x720 as a sensible default.
-func (w *Window) SwapBuffers()                                                   {}
+func (w *Window) SwapBuffers() {
+	// Yield to JS event loop. Without this, the Lua main loop holds
+	// the wasm goroutine forever, the browser tab can't respond to
+	// rAF or input, and Playwright/Chrome eventually kills it.
+	// 16ms approximates 60fps; the engine has its own throttle via
+	// fps target but this ensures yields happen even when engine
+	// thinks it has spare time.
+	time.Sleep(16 * time.Millisecond)
+}
 func (w *Window) SetIcon(icons []image.Image)                                    {}
 func (w *Window) SetSwapInterval(interval int)                                   {}
 func (w *Window) GetSize() (int, int)                                            { return 1280, 720 }

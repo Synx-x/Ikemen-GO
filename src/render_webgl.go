@@ -99,9 +99,15 @@ func (t *Texture_WebGL) CopyData(src *Texture) {
 	logConsole("Texture_WebGL.CopyData called")
 }
 
-// logConsole logs a message to browser console
+// logConsole was spamming 1000+ msgs/sec from BeginFrame/RenderQuad
+// hot paths, killing the chromium tab via OOM. Now gated on
+// verboseRender flag; production hot paths stay silent.
+var verboseRender = false
+
 func logConsole(msg interface{}) {
-	js.Global().Get("console").Call("log", msg)
+	if verboseRender {
+		js.Global().Get("console").Call("log", msg)
+	}
 }
 
 // Renderer_WebGL methods implementing the Renderer interface
