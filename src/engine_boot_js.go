@@ -351,8 +351,10 @@ func init() {
 				}))
 				bridge.Set("engineStatus", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 					return js.ValueOf(map[string]interface{}{
-						"started": engineStarted,
-						"err":     engineLastError,
+						"started":          engineStarted,
+						"err":              engineLastError,
+						"frameCounter":     int(sys.frameCounter),
+						"storyboardActive": sys.storyboard.active,
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
