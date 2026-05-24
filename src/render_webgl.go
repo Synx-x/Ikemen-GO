@@ -351,6 +351,47 @@ func (r *Renderer_WebGL) NewWorkerThread() bool {
 	return false
 }
 
+// FontRenderer_WebGL is a stub font renderer for wasm.
+// Real glyph rendering lands in D5+. For now, all methods are no-ops.
+type FontRenderer_WebGL struct{}
+
+// Implement FontRenderer interface
+func (f *FontRenderer_WebGL) Init(renderer interface{}) {
+	logConsole("FontRenderer_WebGL.Init called")
+}
+
+func (f *FontRenderer_WebGL) LoadFont(file string, scale int32, windowWidth int, windowHeight int) (interface{}, error) {
+	logConsole("FontRenderer_WebGL.LoadFont: " + file)
+	return &Font_WebGL{}, nil
+}
+
+// Font_WebGL is a stub font for wasm.
+type Font_WebGL struct{}
+
+func (f *Font_WebGL) SetColor(red float32, green float32, blue float32, alpha float32) {
+	// No-op stub
+}
+
+func (f *Font_WebGL) SetPalFX(neg bool, gray float32, add, mul [3]float32, hue float32) {
+	// No-op stub
+}
+
+func (f *Font_WebGL) UpdateResolution(windowWidth int, windowHeight int) {
+	// No-op stub
+}
+
+func (f *Font_WebGL) Printf(x, y float32, xscl, yscl float32, spacingXAdd float32, align int32, blend bool, window [4]int32,
+	rxadd float32, rot Rotation, projectionMode int32, fLength float32, rcx, rcy float32,
+	fs string, argv ...interface{}) error {
+	// No-op stub
+	return nil
+}
+
+func (f *Font_WebGL) Width(scale float32, spacingXAdd float32, fs string, argv ...interface{}) float32 {
+	// Stub returns 0 width for all strings
+	return 0
+}
+
 // Register the WebGL renderer on init
 func init() {
 	gfx = &Renderer_WebGL{name: "WebGL2"}

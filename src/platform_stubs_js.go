@@ -238,10 +238,10 @@ func Logcat(s string) {
 	fmt.Println(s)
 }
 
-// selectRenderer returns stub renderers for wasm (util_desktop.go, util_android.go).
-// Real WebGL renderer lands in D5+. For now, return nil Renderer/FontRenderer.
+// selectRenderer returns the WebGL renderer for wasm builds.
+// The Renderer_WebGL and FontRenderer_WebGL are defined in render_webgl.go.
 func selectRenderer(cfgVal string) (Renderer, FontRenderer) {
-	return nil, nil
+	return &Renderer_WebGL{name: "WebGL2"}, &FontRenderer_WebGL{}
 }
 
 // System.newWindow creates a window. Stub for system_sdl.go:22.
