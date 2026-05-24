@@ -1,7 +1,7 @@
 package main
 
 import (
-	"arena"
+	"github.com/ikemen-engine/Ikemen-GO/src/mempool"
 
 	"golang.org/x/exp/maps"
 )
@@ -84,8 +84,8 @@ func DeepCopySlice[T Copyable[T]](src, dst *[]T) {
 	}
 }
 
-func (a *Animation) Clone(ar *arena.Arena, gsp *GameStatePool) (result *Animation) {
-	result = arena.New[Animation](ar)
+func (a *Animation) Clone(ar *mempool.Arena, gsp *GameStatePool) (result *Animation) {
+	result = mempool.New[Animation](ar)
 	*result = *a
 
 	result.frames = *gsp.Get(a.frames).(*[]AnimFrame)
@@ -94,35 +94,35 @@ func (a *Animation) Clone(ar *arena.Arena, gsp *GameStatePool) (result *Animatio
 		result.frames = append(result.frames, *a.frames[i].Clone(ar))
 	}
 
-	result.interpolate_offset = arena.MakeSlice[int32](ar, len(a.interpolate_offset), len(a.interpolate_offset))
+	result.interpolate_offset = mempool.MakeSlice[int32](ar, len(a.interpolate_offset), len(a.interpolate_offset))
 	copy(result.interpolate_offset, a.interpolate_offset)
 
-	result.interpolate_scale = arena.MakeSlice[int32](ar, len(a.interpolate_scale), len(a.interpolate_scale))
+	result.interpolate_scale = mempool.MakeSlice[int32](ar, len(a.interpolate_scale), len(a.interpolate_scale))
 	copy(result.interpolate_scale, a.interpolate_scale)
 
-	result.interpolate_angle = arena.MakeSlice[int32](ar, len(a.interpolate_angle), len(a.interpolate_angle))
+	result.interpolate_angle = mempool.MakeSlice[int32](ar, len(a.interpolate_angle), len(a.interpolate_angle))
 	copy(result.interpolate_angle, a.interpolate_angle)
 
-	result.interpolate_blend = arena.MakeSlice[int32](ar, len(a.interpolate_blend), len(a.interpolate_blend))
+	result.interpolate_blend = mempool.MakeSlice[int32](ar, len(a.interpolate_blend), len(a.interpolate_blend))
 	copy(result.interpolate_blend, a.interpolate_blend)
 
 	return
 }
 
-func (af *AnimFrame) Clone(a *arena.Arena) (result *AnimFrame) {
-	result = arena.New[AnimFrame](a)
+func (af *AnimFrame) Clone(a *mempool.Arena) (result *AnimFrame) {
+	result = mempool.New[AnimFrame](a)
 	*result = *af
-	result.Clsn1 = arena.MakeSlice[[4]float32](a, len(af.Clsn1), len(af.Clsn1))
+	result.Clsn1 = mempool.MakeSlice[[4]float32](a, len(af.Clsn1), len(af.Clsn1))
 	copy(result.Clsn1, af.Clsn1)
-	result.Clsn2 = arena.MakeSlice[[4]float32](a, len(af.Clsn2), len(af.Clsn2))
+	result.Clsn2 = mempool.MakeSlice[[4]float32](a, len(af.Clsn2), len(af.Clsn2))
 	copy(result.Clsn2, af.Clsn2)
 	return
 }
 
 /*
-func (sp StringPool) Clone(a *arena.Arena, gsp *GameStatePool) (result StringPool) {
+func (sp StringPool) Clone(a *mempool.Arena, gsp *GameStatePool) (result StringPool) {
 	result = sp
-	result.List = arena.MakeSlice[string](a, len(sp.List), len(sp.List))
+	result.List = mempool.MakeSlice[string](a, len(sp.List), len(sp.List))
 	copy(result.List, sp.List)
 	result.Map = *gsp.Get(sp.Map).(*map[string]int)
 	maps.Clear(result.Map)
@@ -134,52 +134,52 @@ func (sp StringPool) Clone(a *arena.Arena, gsp *GameStatePool) (result StringPoo
 }
 */
 
-func (b *StateBlock) Clone(a *arena.Arena) (result StateBlock) {
+func (b *StateBlock) Clone(a *mempool.Arena) (result StateBlock) {
 	result = *b
-	result.trigger = arena.MakeSlice[OpCode](a, len(b.trigger), len(b.trigger))
+	result.trigger = mempool.MakeSlice[OpCode](a, len(b.trigger), len(b.trigger))
 	copy(result.trigger, b.trigger)
 	if b.elseBlock != nil {
 		eb := b.elseBlock.Clone(a)
 		result.elseBlock = &eb
 	}
 
-	result.forCtrlVar.be = arena.MakeSlice[OpCode](a, len(b.forCtrlVar.be), len(b.forCtrlVar.be))
+	result.forCtrlVar.be = mempool.MakeSlice[OpCode](a, len(b.forCtrlVar.be), len(b.forCtrlVar.be))
 	copy(result.forCtrlVar.be, b.forCtrlVar.be)
 
 	for i := 0; i < len(b.forExpression); i++ {
-		result.forExpression[i] = arena.MakeSlice[OpCode](a, len(b.forExpression[i]), len(b.forExpression[i]))
+		result.forExpression[i] = mempool.MakeSlice[OpCode](a, len(b.forExpression[i]), len(b.forExpression[i]))
 		copy(result.forExpression[i], b.forExpression[i])
 	}
 
-	result.ctrls = arena.MakeSlice[StateController](a, len(b.ctrls), len(b.ctrls))
+	result.ctrls = mempool.MakeSlice[StateController](a, len(b.ctrls), len(b.ctrls))
 	copy(result.ctrls, b.ctrls)
 	return result
 }
 
-func (sb *StateBytecode) Clone(a *arena.Arena) (result StateBytecode) {
+func (sb *StateBytecode) Clone(a *mempool.Arena) (result StateBytecode) {
 	result = *sb
-	result.stateDef = arena.MakeSlice[byte](a, len(sb.stateDef), len(sb.stateDef))
+	result.stateDef = mempool.MakeSlice[byte](a, len(sb.stateDef), len(sb.stateDef))
 	copy(result.stateDef, sb.stateDef)
 
-	result.ctrlsps = arena.MakeSlice[int32](a, len(sb.ctrlsps), len(sb.ctrlsps))
+	result.ctrlsps = mempool.MakeSlice[int32](a, len(sb.ctrlsps), len(sb.ctrlsps))
 	copy(result.ctrlsps, sb.ctrlsps)
 	result.block = sb.block.Clone(a)
 	return result
 }
 
-func (ghv *GetHitVar) Clone(a *arena.Arena) (result *GetHitVar) {
-	result = arena.New[GetHitVar](a)
+func (ghv *GetHitVar) Clone(a *mempool.Arena) (result *GetHitVar) {
+	result = mempool.New[GetHitVar](a)
 	*result = *ghv
 
 	// Manually copy references that shallow copy poorly, as needed
 	// Pointers, slices, maps, functions, channels etc
-	result.targetedBy = arena.MakeSlice[[2]int32](a, len(ghv.targetedBy), len(ghv.targetedBy))
+	result.targetedBy = mempool.MakeSlice[[2]int32](a, len(ghv.targetedBy), len(ghv.targetedBy))
 	copy(result.targetedBy, ghv.targetedBy)
 
 	return
 }
 
-func (ai *AfterImage) Clone(a *arena.Arena, gsp *GameStatePool) *AfterImage {
+func (ai *AfterImage) Clone(a *mempool.Arena, gsp *GameStatePool) *AfterImage {
 	if ai == nil {
 		return nil
 	}
@@ -204,7 +204,7 @@ func (ai *AfterImage) Clone(a *arena.Arena, gsp *GameStatePool) *AfterImage {
 	return result
 }
 
-func (e *Explod) Clone(a *arena.Arena, gsp *GameStatePool) *Explod {
+func (e *Explod) Clone(a *mempool.Arena, gsp *GameStatePool) *Explod {
 	if e == nil {
 		return nil
 	}
@@ -227,7 +227,7 @@ func (e *Explod) Clone(a *arena.Arena, gsp *GameStatePool) *Explod {
 	return result
 }
 
-func (p *Projectile) clone(a *arena.Arena, gsp *GameStatePool) *Projectile {
+func (p *Projectile) clone(a *mempool.Arena, gsp *GameStatePool) *Projectile {
 	if p == nil {
 		return nil
 	}
@@ -250,19 +250,19 @@ func (p *Projectile) clone(a *arena.Arena, gsp *GameStatePool) *Projectile {
 	return result
 }
 
-func (ss *StateState) Clone(a *arena.Arena) (result StateState) {
+func (ss *StateState) Clone(a *mempool.Arena) (result StateState) {
 	result = *ss
-	result.ps = arena.MakeSlice[int32](a, len(ss.ps), len(ss.ps))
+	result.ps = mempool.MakeSlice[int32](a, len(ss.ps), len(ss.ps))
 	copy(result.ps, ss.ps)
 	//for i := 0; i < len(ss.hitPauseExecutionToggleFlags); i++ {
-	//	result.hitPauseExecutionToggleFlags[i] = arena.MakeSlice[bool](a, len(ss.hitPauseExecutionToggleFlags[i]), len(ss.hitPauseExecutionToggleFlags[i]))
+	//	result.hitPauseExecutionToggleFlags[i] = mempool.MakeSlice[bool](a, len(ss.hitPauseExecutionToggleFlags[i]), len(ss.hitPauseExecutionToggleFlags[i]))
 	//	copy(result.hitPauseExecutionToggleFlags[i], ss.hitPauseExecutionToggleFlags[i])
 	//}
 	result.sb = ss.sb.Clone(a)
 	return result
 }
 
-func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
+func (c *Char) Clone(a *mempool.Arena, gsp *GameStatePool) (result Char) {
 	result = Char{}
 	result = *c
 
@@ -300,22 +300,22 @@ func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	// Pointers, slices, maps, functions, channels etc
 	result.ghv = *c.ghv.Clone(a)
 
-	result.children = arena.MakeSlice[int32](a, len(c.children), len(c.children))
+	result.children = mempool.MakeSlice[int32](a, len(c.children), len(c.children))
 	copy(result.children, c.children)
 
-	result.targets = arena.MakeSlice[int32](a, len(c.targets), len(c.targets))
+	result.targets = mempool.MakeSlice[int32](a, len(c.targets), len(c.targets))
 	copy(result.targets, c.targets)
 
-	result.hitdefTargets = arena.MakeSlice[int32](a, len(c.hitdefTargets), len(c.hitdefTargets))
+	result.hitdefTargets = mempool.MakeSlice[int32](a, len(c.hitdefTargets), len(c.hitdefTargets))
 	copy(result.hitdefTargets, c.hitdefTargets)
 
-	result.hitdefTargetsBuffer = arena.MakeSlice[int32](a, len(c.hitdefTargetsBuffer), len(c.hitdefTargetsBuffer))
+	result.hitdefTargetsBuffer = mempool.MakeSlice[int32](a, len(c.hitdefTargetsBuffer), len(c.hitdefTargetsBuffer))
 	copy(result.hitdefTargetsBuffer, c.hitdefTargetsBuffer)
 
-	result.enemyNearList = arena.MakeSlice[int32](a, len(c.enemyNearList), len(c.enemyNearList))
+	result.enemyNearList = mempool.MakeSlice[int32](a, len(c.enemyNearList), len(c.enemyNearList))
 	copy(result.enemyNearList, c.enemyNearList)
 
-	result.p2EnemyList = arena.MakeSlice[int32](a, len(c.p2EnemyList), len(c.p2EnemyList))
+	result.p2EnemyList = mempool.MakeSlice[int32](a, len(c.p2EnemyList), len(c.p2EnemyList))
 	copy(result.p2EnemyList, c.p2EnemyList)
 
 	//if c.p2EnemyBackup != nil {
@@ -326,17 +326,17 @@ func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	//result.p2EnemyBackup = c.p2EnemyBackup
 	// Converted to an ID so the shallow copy now gets it
 
-	result.inputShift = arena.MakeSlice[[2]int](a, len(c.inputShift), len(c.inputShift))
+	result.inputShift = mempool.MakeSlice[[2]int](a, len(c.inputShift), len(c.inputShift))
 	copy(result.inputShift, c.inputShift)
 
-	result.clsnOverrides = arena.MakeSlice[ClsnOverride](a, len(c.clsnOverrides), len(c.clsnOverrides))
+	result.clsnOverrides = mempool.MakeSlice[ClsnOverride](a, len(c.clsnOverrides), len(c.clsnOverrides))
 	copy(result.clsnOverrides, c.clsnOverrides)
 
-	result.clipboardText = arena.MakeSlice[string](a, len(c.clipboardText), len(c.clipboardText))
+	result.clipboardText = mempool.MakeSlice[string](a, len(c.clipboardText), len(c.clipboardText))
 	copy(result.clipboardText, c.clipboardText)
 
 	if c.keyctrl[0] {
-		result.cmd = arena.MakeSlice[CommandList](a, len(c.cmd), len(c.cmd))
+		result.cmd = mempool.MakeSlice[CommandList](a, len(c.cmd), len(c.cmd))
 		for i, c := range c.cmd {
 			result.cmd[i] = c.Clone(a)
 		}
@@ -378,13 +378,13 @@ func (c *Char) Clone(a *arena.Arena, gsp *GameStatePool) (result Char) {
 	return
 }
 
-func (cl *CharList) Clone(a *arena.Arena, gsp *GameStatePool) (result CharList) {
+func (cl *CharList) Clone(a *mempool.Arena, gsp *GameStatePool) (result CharList) {
 	result = *cl
 
-	result.creationOrder = arena.MakeSlice[*Char](a, len(cl.creationOrder), len(cl.creationOrder))
+	result.creationOrder = mempool.MakeSlice[*Char](a, len(cl.creationOrder), len(cl.creationOrder))
 	copy(result.creationOrder, cl.creationOrder)
 
-	result.runOrder = arena.MakeSlice[*Char](a, len(cl.runOrder), len(cl.runOrder))
+	result.runOrder = mempool.MakeSlice[*Char](a, len(cl.runOrder), len(cl.runOrder))
 	copy(result.runOrder, cl.runOrder)
 
 	result.idMap = *gsp.Get(cl.idMap).(*map[int32]*Char)
@@ -396,39 +396,39 @@ func (cl *CharList) Clone(a *arena.Arena, gsp *GameStatePool) (result CharList) 
 	return
 }
 
-func (pf *PalFX) Clone(a *arena.Arena) *PalFX {
+func (pf *PalFX) Clone(a *mempool.Arena) *PalFX {
 	if pf == nil {
 		return nil
 	}
 	result := *pf
 
 	if pf.remap != nil {
-		result.remap = arena.MakeSlice[int](a, len(pf.remap), len(pf.remap))
+		result.remap = mempool.MakeSlice[int](a, len(pf.remap), len(pf.remap))
 		copy(result.remap, pf.remap)
 	}
 
 	return &result
 }
 
-func (ce *CommandStep) Clone(a *arena.Arena) (result CommandStep) {
+func (ce *CommandStep) Clone(a *mempool.Arena) (result CommandStep) {
 	result = *ce
-	result.keys = arena.MakeSlice[CommandStepKey](a, len(ce.keys), len(ce.keys))
+	result.keys = mempool.MakeSlice[CommandStepKey](a, len(ce.keys), len(ce.keys))
 	copy(result.keys, ce.keys)
 	return
 }
 
-func (c *Command) clone(a *arena.Arena) (result Command) {
+func (c *Command) clone(a *mempool.Arena) (result Command) {
 	result = *c
 
-	result.completed = arena.MakeSlice[bool](a, len(c.completed), len(c.completed))
+	result.completed = mempool.MakeSlice[bool](a, len(c.completed), len(c.completed))
 	copy(result.completed, c.completed)
 
-	result.stepTimers = arena.MakeSlice[int32](a, len(c.stepTimers), len(c.stepTimers))
+	result.stepTimers = mempool.MakeSlice[int32](a, len(c.stepTimers), len(c.stepTimers))
 	copy(result.stepTimers, c.stepTimers)
 
 	// Maybe we don't need to save these or any other things that are only updated upon loading the char
 	/*
-		result.steps = arena.MakeSlice[CommandStep](a, len(c.steps), len(c.steps))
+		result.steps = mempool.MakeSlice[CommandStep](a, len(c.steps), len(c.steps))
 		for i := 0; i < len(c.steps); i++ {
 			result.steps[i] = c.steps[i].Clone(a)
 		}
@@ -436,12 +436,12 @@ func (c *Command) clone(a *arena.Arena) (result Command) {
 
 	// New input code does not use these
 	/*
-		result.held = arena.MakeSlice[bool](a, len(c.held), len(c.held))
+		result.held = mempool.MakeSlice[bool](a, len(c.held), len(c.held))
 		copy(result.held, c.held)
 
-		result.hold = arena.MakeSlice[[]CommandKey](a, len(c.hold), len(c.hold))
+		result.hold = mempool.MakeSlice[[]CommandKey](a, len(c.hold), len(c.hold))
 		for i := 0; i < len(c.hold); i++ {
-			result.hold[i] = arena.MakeSlice[CommandKey](a, len(c.hold[i]), len(c.hold[i]))
+			result.hold[i] = mempool.MakeSlice[CommandKey](a, len(c.hold[i]), len(c.hold[i]))
 			for j := 0; j < len(c.hold[i]); j++ {
 				result.hold[i][j] = c.hold[i][j]
 			}
@@ -451,15 +451,15 @@ func (c *Command) clone(a *arena.Arena) (result Command) {
 	return
 }
 
-func (cl *CommandList) Clone(a *arena.Arena) (result CommandList) {
+func (cl *CommandList) Clone(a *mempool.Arena) (result CommandList) {
 	result = *cl
 
-	result.Buffer = arena.New[InputBuffer](a)
+	result.Buffer = mempool.New[InputBuffer](a)
 	*result.Buffer = *cl.Buffer
 
-	result.Commands = arena.MakeSlice[[]Command](a, len(cl.Commands), len(cl.Commands))
+	result.Commands = mempool.MakeSlice[[]Command](a, len(cl.Commands), len(cl.Commands))
 	for i := 0; i < len(cl.Commands); i++ {
-		result.Commands[i] = arena.MakeSlice[Command](a, len(cl.Commands[i]), len(cl.Commands[i]))
+		result.Commands[i] = mempool.MakeSlice[Command](a, len(cl.Commands[i]), len(cl.Commands[i]))
 		for j := 0; j < len(cl.Commands[i]); j++ {
 			result.Commands[i][j] = cl.Commands[i][j].clone(a)
 		}
@@ -468,7 +468,7 @@ func (cl *CommandList) Clone(a *arena.Arena) (result CommandList) {
 	return
 }
 
-func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
+func (fs *FightScreen) Clone(a *mempool.Arena) (result FightScreen) {
 	result = *fs
 
 	// Round
@@ -483,7 +483,7 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	// WinCount
 	for i := 0; i < len(fs.winCounts); i++ {
 		if fs.winCounts[i] != nil {
-			result.winCounts[i] = arena.New[FightScreenWinCount](a)
+			result.winCounts[i] = mempool.New[FightScreenWinCount](a)
 			*result.winCounts[i] = *fs.winCounts[i]
 		}
 	}
@@ -491,7 +491,7 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	// Combo
 	for i := 0; i < len(fs.combos); i++ {
 		if fs.combos[i] != nil {
-			result.combos[i] = arena.New[FightScreenCombo](a)
+			result.combos[i] = mempool.New[FightScreenCombo](a)
 			*result.combos[i] = *fs.combos[i]
 		}
 	}
@@ -499,7 +499,7 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	// Score
 	for i := 0; i < len(fs.scores); i++ {
 		if fs.scores[i] != nil {
-			result.scores[i] = arena.New[FightScreenScore](a)
+			result.scores[i] = mempool.New[FightScreenScore](a)
 			*result.scores[i] = *fs.scores[i]
 		}
 	}
@@ -508,84 +508,84 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	/*
 		//UIT
 		if fs.ti != nil {
-			result.ti = arena.New[FightScreenTime](a)
+			result.ti = mempool.New[FightScreenTime](a)
 			*result.ti = *fs.ti
 		}
 		//
 
 		// Not UIT adding anyway
 		if fs.ma != nil {
-			result.ma = arena.New[FightScreenMatch](a)
+			result.ma = mempool.New[FightScreenMatch](a)
 			*result.ma = *fs.ma
 		}
 
 		for i := 0; i < len(fs.ai); i++ {
-			result.aiLevels[i] = arena.New[FightScreenAiLevel](a)
+			result.aiLevels[i] = mempool.New[FightScreenAiLevel](a)
 			*result.aiLevels[i] = *fs.aiLevels[i]
 		}
 
 		if fs.tr != nil {
-			result.tr = arena.New[FightScreenTimer](a)
+			result.tr = mempool.New[FightScreenTimer](a)
 			*result.tr = *fs.tr
 		}
 		//
 
 		// Order
 		for i := range result.order {
-			result.order[i] = arena.MakeSlice[int](a, len(fs.order[i]), len(fs.order[i]))
+			result.order[i] = mempool.MakeSlice[int](a, len(fs.order[i]), len(fs.order[i]))
 			copy(result.order[i], fs.order[i])
 		}
 
 		// HealthBar
 		for i := range result.hb {
-			result.hb[i] = arena.MakeSlice[*HealthBar](a, len(fs.hb[i]), len(fs.hb[i]))
+			result.hb[i] = mempool.MakeSlice[*HealthBar](a, len(fs.hb[i]), len(fs.hb[i]))
 			for j := 0; j < len(fs.hb[i]); j++ {
-				result.hb[i][j] = arena.New[HealthBar](a)
+				result.hb[i][j] = mempool.New[HealthBar](a)
 				*result.hb[i][j] = *fs.hb[i][j]
 			}
 		}
 
 		// PowerBar
 		for i := range result.pb {
-			result.pb[i] = arena.MakeSlice[*PowerBar](a, len(fs.pb[i]), len(fs.pb[i]))
+			result.pb[i] = mempool.MakeSlice[*PowerBar](a, len(fs.pb[i]), len(fs.pb[i]))
 			for j := 0; j < len(fs.pb[i]); j++ {
-				result.pb[i][j] = arena.New[PowerBar](a)
+				result.pb[i][j] = mempool.New[PowerBar](a)
 				*result.pb[i][j] = *fs.pb[i][j]
 			}
 		}
 
 		// GuardBar
 		for i := range result.gb {
-			result.gb[i] = arena.MakeSlice[*GuardBar](a, len(fs.gb[i]), len(fs.gb[i]))
+			result.gb[i] = mempool.MakeSlice[*GuardBar](a, len(fs.gb[i]), len(fs.gb[i]))
 			for j := 0; j < len(fs.gb[i]); j++ {
-				result.gb[i][j] = arena.New[GuardBar](a)
+				result.gb[i][j] = mempool.New[GuardBar](a)
 				*result.gb[i][j] = *fs.gb[i][j]
 			}
 		}
 
 		// StunBar
 		for i := range result.sb {
-			result.sb[i] = arena.MakeSlice[*StunBar](a, len(fs.sb[i]), len(fs.sb[i]))
+			result.sb[i] = mempool.MakeSlice[*StunBar](a, len(fs.sb[i]), len(fs.sb[i]))
 			for j := 0; j < len(fs.sb[i]); j++ {
-				result.sb[i][j] = arena.New[StunBar](a)
+				result.sb[i][j] = mempool.New[StunBar](a)
 				*result.sb[i][j] = *fs.sb[i][j]
 			}
 		}
 
 		// Face
 		for i := range result.fa {
-			result.faces[i] = arena.MakeSlice[*FightScreenFace](a, len(fs.faces[i]), len(fs.faces[i]))
+			result.faces[i] = mempool.MakeSlice[*FightScreenFace](a, len(fs.faces[i]), len(fs.faces[i]))
 			for j := 0; j < len(fs.faces[i]); j++ {
-				result.faces[i][j] = arena.New[FightScreenFace](a)
+				result.faces[i][j] = mempool.New[FightScreenFace](a)
 				*result.faces[i][j] = *fs.faces[i][j]
 			}
 		}
 
 		// Name
 		for i := range result.nm {
-			result.names[i] = arena.MakeSlice[*FightScreenName](a, len(fs.names[i]), len(fs.names[i]))
+			result.names[i] = mempool.MakeSlice[*FightScreenName](a, len(fs.names[i]), len(fs.names[i]))
 			for j := 0; j < len(fs.names[i]); j++ {
-				result.names[i][j] = arena.New[FightScreenName](a)
+				result.names[i][j] = mempool.New[FightScreenName](a)
 				*result.names[i][j] = *fs.names[i][j]
 			}
 		}
@@ -594,14 +594,14 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	// Action
 	for i := range result.actions {
 		if fs.actions[i] != nil {
-			result.actions[i] = arena.New[FightScreenAction](a)
+			result.actions[i] = mempool.New[FightScreenAction](a)
 
 			*result.actions[i] = *fs.actions[i]
 
 			if fs.actions[i].messages != nil {
-				result.actions[i].messages = arena.MakeSlice[*FSMsg](a, len(fs.actions[i].messages), len(fs.actions[i].messages))
+				result.actions[i].messages = mempool.MakeSlice[*FSMsg](a, len(fs.actions[i].messages), len(fs.actions[i].messages))
 				for j := 0; j < len(fs.actions[i].messages); j++ {
-					result.actions[i].messages[j] = arena.New[FSMsg](a)
+					result.actions[i].messages[j] = mempool.New[FSMsg](a)
 					*result.actions[i].messages[j] = *fs.actions[i].messages[j]
 				}
 			}
@@ -611,12 +611,12 @@ func (fs *FightScreen) Clone(a *arena.Arena) (result FightScreen) {
 	return
 }
 
-func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
+func (s *Stage) Clone(a *mempool.Arena, gsp *GameStatePool) *Stage {
 	result := &Stage{}
 	*result = *s
 
 	// Clone attached char def
-	result.attachedchardef = arena.MakeSlice[string](a, len(s.attachedchardef), len(s.attachedchardef))
+	result.attachedchardef = mempool.MakeSlice[string](a, len(s.attachedchardef), len(s.attachedchardef))
 	copy(result.attachedchardef, s.attachedchardef)
 
 	// Clone constants
@@ -634,7 +634,7 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 
 	// Clone backgrounds and rebuild mapping
 	bgMap := make(map[*backGround]*backGround, len(s.bg))
-	result.bg = arena.MakeSlice[*backGround](a, len(s.bg), len(s.bg))
+	result.bg = mempool.MakeSlice[*backGround](a, len(s.bg), len(s.bg))
 	for i, oldbg := range s.bg {
 		newbg := &backGround{}
 		*newbg = *oldbg
@@ -647,10 +647,10 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 	}
 
 	// Clone bgCtrl and point them to the cloned BG's
-	result.bgc = arena.MakeSlice[bgCtrl](a, len(s.bgc), len(s.bgc))
+	result.bgc = mempool.MakeSlice[bgCtrl](a, len(s.bgc), len(s.bgc))
 	for i, oldbgc := range s.bgc {
 		newbgc := oldbgc
-		newbgc.bg = arena.MakeSlice[*backGround](a, len(oldbgc.bg), len(oldbgc.bg))
+		newbgc.bg = mempool.MakeSlice[*backGround](a, len(oldbgc.bg), len(oldbgc.bg))
 		for j, oldbg := range oldbgc.bg {
 			newbgc.bg[j] = bgMap[oldbg]
 		}
@@ -660,7 +660,7 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 	return result
 }
 
-/*func (s Select) Clone(a *arena.Arena) (result Select) {
+/*func (s Select) Clone(a *mempool.Arena) (result Select) {
 	result = s
 
 	// Copy selected (mutable; slices)
@@ -670,7 +670,7 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 			continue
 		}
 		if a != nil {
-			result.selected[side] = arena.MakeSlice[[2]int](a, len(s.selected[side]), len(s.selected[side]))
+			result.selected[side] = mempool.MakeSlice[[2]int](a, len(s.selected[side]), len(s.selected[side]))
 		} else {
 			result.selected[side] = make([][2]int, len(s.selected[side]))
 		}
@@ -696,7 +696,7 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 			}
 			var nlst []*bgMusic
 			if a != nil {
-				nlst = arena.MakeSlice[*bgMusic](a, len(lst), len(lst))
+				nlst = mempool.MakeSlice[*bgMusic](a, len(lst), len(lst))
 			} else {
 				nlst = make([]*bgMusic, len(lst))
 			}
@@ -714,11 +714,11 @@ func (s *Stage) Clone(a *arena.Arena, gsp *GameStatePool) *Stage {
 	return result
 }*/
 
-func cloneTextSprite(a *arena.Arena, ts *TextSprite) *TextSprite {
+func cloneTextSprite(a *mempool.Arena, ts *TextSprite) *TextSprite {
 	if ts == nil {
 		return nil
 	}
-	dst := arena.New[TextSprite](a)
+	dst := mempool.New[TextSprite](a)
 	*dst = *ts
 
 	// Only copy references that shallow copy poorly, as needed.
@@ -732,11 +732,11 @@ func cloneTextSprite(a *arena.Arena, ts *TextSprite) *TextSprite {
 	return dst
 }
 
-func (fa *Fade) Clone(a *arena.Arena) *Fade {
+func (fa *Fade) Clone(a *mempool.Arena) *Fade {
 	if fa == nil {
 		return nil
 	}
-	result := arena.New[Fade](a)
+	result := mempool.New[Fade](a)
 	*result = *fa
 	// Avoid sharing animation state between saved states.
 	if fa.animData != nil {
@@ -746,20 +746,20 @@ func (fa *Fade) Clone(a *arena.Arena) *Fade {
 	return result
 }
 
-/*func (me *MotifMenu) Clone(a *arena.Arena) (result MotifMenu) {
+/*func (me *MotifMenu) Clone(a *mempool.Arena) (result MotifMenu) {
 	result = *me
 	return
 }*/
 
-/*func (ch *MotifChallenger) Clone(a *arena.Arena) (result MotifChallenger) {
+/*func (ch *MotifChallenger) Clone(a *mempool.Arena) (result MotifChallenger) {
 	result = *ch
 	return
 }*/
 
-func (co *MotifContinue) Clone(a *arena.Arena) (result MotifContinue) {
+func (co *MotifContinue) Clone(a *mempool.Arena) (result MotifContinue) {
 	result = *co
 	if co.counts != nil {
-		result.counts = arena.MakeSlice[string](a, len(co.counts), len(co.counts))
+		result.counts = mempool.MakeSlice[string](a, len(co.counts), len(co.counts))
 		copy(result.counts, co.counts)
 	}
 	return
@@ -774,7 +774,7 @@ func cloneDialogueToken(t DialogueToken) DialogueToken {
 	return result
 }
 
-func cloneDialogueParsedLine(a *arena.Arena, src DialogueParsedLine) (result DialogueParsedLine) {
+func cloneDialogueParsedLine(a *mempool.Arena, src DialogueParsedLine) (result DialogueParsedLine) {
 	result = src
 	if src.tokens != nil {
 		result.tokens = make(map[int][]DialogueToken, len(src.tokens))
@@ -782,7 +782,7 @@ func cloneDialogueParsedLine(a *arena.Arena, src DialogueParsedLine) (result Dia
 			if toks == nil {
 				continue
 			}
-			dst := arena.MakeSlice[DialogueToken](a, len(toks), len(toks))
+			dst := mempool.MakeSlice[DialogueToken](a, len(toks), len(toks))
 			for i := 0; i < len(toks); i++ {
 				dst[i] = cloneDialogueToken(toks[i])
 			}
@@ -792,15 +792,15 @@ func cloneDialogueParsedLine(a *arena.Arena, src DialogueParsedLine) (result Dia
 	return
 }
 
-/*func (de *MotifDemo) Clone(a *arena.Arena) (result MotifDemo) {
+/*func (de *MotifDemo) Clone(a *mempool.Arena) (result MotifDemo) {
 	result = *de
 	return
 }*/
 
-func (di *MotifDialogue) Clone(a *arena.Arena) (result MotifDialogue) {
+func (di *MotifDialogue) Clone(a *mempool.Arena) (result MotifDialogue) {
 	result = *di
 	if di.parsed != nil {
-		result.parsed = arena.MakeSlice[DialogueParsedLine](a, len(di.parsed), len(di.parsed))
+		result.parsed = mempool.MakeSlice[DialogueParsedLine](a, len(di.parsed), len(di.parsed))
 		for i := 0; i < len(di.parsed); i++ {
 			result.parsed[i] = cloneDialogueParsedLine(a, di.parsed[i])
 		}
@@ -808,24 +808,24 @@ func (di *MotifDialogue) Clone(a *arena.Arena) (result MotifDialogue) {
 	return
 }
 
-/*func (vi *MotifVictory) Clone(a *arena.Arena) (result MotifVictory) {
+/*func (vi *MotifVictory) Clone(a *mempool.Arena) (result MotifVictory) {
 	result = *vi
 	return
 }*/
 
-func (rr *rankingRow) Clone(a *arena.Arena) (result rankingRow) {
+func (rr *rankingRow) Clone(a *mempool.Arena) (result rankingRow) {
 	result = *rr
 	if rr.pals != nil {
-		result.pals = arena.MakeSlice[int32](a, len(rr.pals), len(rr.pals))
+		result.pals = mempool.MakeSlice[int32](a, len(rr.pals), len(rr.pals))
 		copy(result.pals, rr.pals)
 	}
 	if rr.chars != nil {
-		result.chars = arena.MakeSlice[string](a, len(rr.chars), len(rr.chars))
+		result.chars = mempool.MakeSlice[string](a, len(rr.chars), len(rr.chars))
 		copy(result.chars, rr.chars)
 	}
 	// Per-slot anim state must not be shared between saved states.
 	if rr.bgs != nil {
-		result.bgs = arena.MakeSlice[*Anim](a, len(rr.bgs), len(rr.bgs))
+		result.bgs = mempool.MakeSlice[*Anim](a, len(rr.bgs), len(rr.bgs))
 		for i := 0; i < len(rr.bgs); i++ {
 			if rr.bgs[i] != nil {
 				result.bgs[i] = rr.bgs[i].Copy()
@@ -833,7 +833,7 @@ func (rr *rankingRow) Clone(a *arena.Arena) (result rankingRow) {
 		}
 	}
 	if rr.faces != nil {
-		result.faces = arena.MakeSlice[*Anim](a, len(rr.faces), len(rr.faces))
+		result.faces = mempool.MakeSlice[*Anim](a, len(rr.faces), len(rr.faces))
 		for i := 0; i < len(rr.faces); i++ {
 			if rr.faces[i] != nil {
 				result.faces[i] = rr.faces[i].Copy()
@@ -853,42 +853,42 @@ func (rr *rankingRow) Clone(a *arena.Arena) (result rankingRow) {
 	return
 }
 
-func (hi *MotifHiscore) Clone(a *arena.Arena) (result MotifHiscore) {
+func (hi *MotifHiscore) Clone(a *mempool.Arena) (result MotifHiscore) {
 	result = *hi
 	if hi.rows != nil {
-		result.rows = arena.MakeSlice[rankingRow](a, len(hi.rows), len(hi.rows))
+		result.rows = mempool.MakeSlice[rankingRow](a, len(hi.rows), len(hi.rows))
 		for i := 0; i < len(hi.rows); i++ {
 			result.rows[i] = hi.rows[i].Clone(a)
 		}
 	}
 	if hi.letters != nil {
-		result.letters = arena.MakeSlice[int](a, len(hi.letters), len(hi.letters))
+		result.letters = mempool.MakeSlice[int](a, len(hi.letters), len(hi.letters))
 		copy(result.letters, hi.letters)
 	}
 	return
 }
 
-func (wi *MotifWin) Clone(a *arena.Arena) (result MotifWin) {
+func (wi *MotifWin) Clone(a *mempool.Arena) (result MotifWin) {
 	result = *wi
 
 	if wi.keyCancel != nil {
-		result.keyCancel = arena.MakeSlice[string](a, len(wi.keyCancel), len(wi.keyCancel))
+		result.keyCancel = mempool.MakeSlice[string](a, len(wi.keyCancel), len(wi.keyCancel))
 		copy(result.keyCancel, wi.keyCancel)
 	}
 	for i := 0; i < 4; i++ {
 		if wi.p1States[i] != nil {
-			result.p1States[i] = arena.MakeSlice[int32](a, len(wi.p1States[i]), len(wi.p1States[i]))
+			result.p1States[i] = mempool.MakeSlice[int32](a, len(wi.p1States[i]), len(wi.p1States[i]))
 			copy(result.p1States[i], wi.p1States[i])
 		}
 		if wi.p2States[i] != nil {
-			result.p2States[i] = arena.MakeSlice[int32](a, len(wi.p2States[i]), len(wi.p2States[i]))
+			result.p2States[i] = mempool.MakeSlice[int32](a, len(wi.p2States[i]), len(wi.p2States[i]))
 			copy(result.p2States[i], wi.p2States[i])
 		}
 	}
 	return
 }
 
-func (m *Motif) Clone(a *arena.Arena, postMatch bool) (result Motif) {
+func (m *Motif) Clone(a *mempool.Arena, postMatch bool) (result Motif) {
 	result = *m
 
 	// Fade state
@@ -923,7 +923,7 @@ func (m *Motif) Clone(a *arena.Arena, postMatch bool) (result Motif) {
 // Music tables are treated as immutable during a match; for storyboard we only need
 // to isolate map/slice headers so saved states don't alias if something rebuilds them.
 // The *bgMusic entries themselves are treated as immutable; copying pointers is enough.
-func cloneMusicMapShallow(a *arena.Arena, src Music) Music {
+func cloneMusicMapShallow(a *mempool.Arena, src Music) Music {
 	if src == nil {
 		return nil
 	}
@@ -933,7 +933,7 @@ func cloneMusicMapShallow(a *arena.Arena, src Music) Music {
 			dst[k] = nil
 			continue
 		}
-		nlst := arena.MakeSlice[*bgMusic](a, len(lst), len(lst))
+		nlst := mempool.MakeSlice[*bgMusic](a, len(lst), len(lst))
 		copy(nlst, lst)
 		dst[k] = nlst
 	}
@@ -945,7 +945,7 @@ func cloneMusicMapShallow(a *arena.Arena, src Music) Music {
 // - Deep-copies runtime-mutated per-layer state (Anim/Text + typewriter fields).
 // - Keeps static resources shared (IniFile/Sff/Snd/Fnt/Model/At/etc).
 // - Rebuilds derived dialogue queue so pointers point into the cloned layer maps.
-func (s *Storyboard) Clone(a *arena.Arena) (result Storyboard) {
+func (s *Storyboard) Clone(a *mempool.Arena) (result Storyboard) {
 	if s == nil {
 		return Storyboard{}
 	}
@@ -955,7 +955,7 @@ func (s *Storyboard) Clone(a *arena.Arena) (result Storyboard) {
 
 	// sceneKeys is mutated/rebuilt; don't alias.
 	if s.sceneKeys != nil {
-		result.sceneKeys = arena.MakeSlice[string](a, len(s.sceneKeys), len(s.sceneKeys))
+		result.sceneKeys = mempool.MakeSlice[string](a, len(s.sceneKeys), len(s.sceneKeys))
 		copy(result.sceneKeys, s.sceneKeys)
 	}
 

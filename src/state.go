@@ -1,7 +1,7 @@
 package main
 
 import (
-	"arena"
+	"github.com/ikemen-engine/Ikemen-GO/src/mempool"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -83,7 +83,7 @@ func (gs *GameState) LoadState(stateID int) {
 		sys.rollback.session.netTime = gs.netTime
 	}
 
-	sys.arenaLoadMap[stateID] = arena.NewArena()
+	sys.arenaLoadMap[stateID] = mempool.NewArena()
 	a := sys.arenaLoadMap[stateID]
 	gsp := &sys.loadPool
 
@@ -96,11 +96,11 @@ func (gs *GameState) LoadState(stateID int) {
 	gs.loadCharTextData(a)
 	gs.loadPalFX(a)
 
-	sys.bcStack = arena.MakeSlice[BytecodeValue](a, len(gs.bcStack), len(gs.bcStack))
+	sys.bcStack = mempool.MakeSlice[BytecodeValue](a, len(gs.bcStack), len(gs.bcStack))
 	copy(sys.bcStack, gs.bcStack)
-	sys.bcVarStack = arena.MakeSlice[BytecodeValue](a, len(gs.bcVarStack), len(gs.bcVarStack))
+	sys.bcVarStack = mempool.MakeSlice[BytecodeValue](a, len(gs.bcVarStack), len(gs.bcVarStack))
 	copy(sys.bcVarStack, gs.bcVarStack)
-	sys.bcVar = arena.MakeSlice[BytecodeValue](a, len(gs.bcVar), len(gs.bcVar))
+	sys.bcVar = mempool.MakeSlice[BytecodeValue](a, len(gs.bcVar), len(gs.bcVar))
 	copy(sys.bcVar, gs.bcVar)
 
 	// Only try loading the stage if it was saved
@@ -108,9 +108,9 @@ func (gs *GameState) LoadState(stateID int) {
 		sys.stage = gs.stage.Clone(a, gsp)
 	}
 
-	sys.workBe = arena.MakeSlice[BytecodeExp](a, len(gs.workBe), len(gs.workBe))
+	sys.workBe = mempool.MakeSlice[BytecodeExp](a, len(gs.workBe), len(gs.workBe))
 	for i := 0; i < len(gs.workBe); i++ {
-		sys.workBe[i] = arena.MakeSlice[OpCode](a, len(gs.workBe[i]), len(gs.workBe[i]))
+		sys.workBe[i] = mempool.MakeSlice[OpCode](a, len(gs.workBe[i]), len(gs.workBe[i]))
 		copy(sys.workBe[i], gs.workBe[i])
 	}
 
@@ -119,7 +119,7 @@ func (gs *GameState) LoadState(stateID int) {
 	//sys.debugDisplay = gs.debugDisplay
 
 	// Things that directly or indirectly get put into CGO can't go into arenas
-	sys.workpal = make([]uint32, len(gs.workpal)) //arena.MakeSlice[uint32](a, len(gs.workpal), len(gs.workpal))
+	sys.workpal = make([]uint32, len(gs.workpal)) //mempool.MakeSlice[uint32](a, len(gs.workpal), len(gs.workpal))
 	copy(sys.workpal, gs.workpal)
 
 	sys.fightScreen = gs.fightScreen.Clone(a)
@@ -138,10 +138,10 @@ func (gs *GameState) LoadState(stateID int) {
 
 	sys.cgi = gs.cgi
 
-	sys.timerRounds = arena.MakeSlice[int32](a, len(gs.timerRounds), len(gs.timerRounds))
+	sys.timerRounds = mempool.MakeSlice[int32](a, len(gs.timerRounds), len(gs.timerRounds))
 	copy(sys.timerRounds, gs.timerRounds)
 
-	sys.scoreRounds = arena.MakeSlice[[2]float32](a, len(gs.scoreRounds), len(gs.scoreRounds))
+	sys.scoreRounds = mempool.MakeSlice[[2]float32](a, len(gs.scoreRounds), len(gs.scoreRounds))
 	copy(sys.scoreRounds, gs.scoreRounds)
 
 	//sys.sel = gs.sel.Clone(a)
@@ -151,7 +151,7 @@ func (gs *GameState) LoadState(stateID int) {
 
 	sys.motif.di.active = gs.dialogueFlg
 
-	sys.timerCount = arena.MakeSlice[int32](a, len(gs.timerCount), len(gs.timerCount))
+	sys.timerCount = mempool.MakeSlice[int32](a, len(gs.timerCount), len(gs.timerCount))
 	copy(sys.timerCount, gs.timerCount)
 
 	// gotta keep these pointers around because they are userdata
@@ -186,7 +186,7 @@ func (gs *GameState) SaveState(stateID int) {
 		gs.netTime = sys.rollback.session.netTime
 	}
 
-	sys.arenaSaveMap[stateID] = arena.NewArena()
+	sys.arenaSaveMap[stateID] = mempool.NewArena()
 	a := sys.arenaSaveMap[stateID]
 	gsp := &sys.savePool
 
@@ -202,11 +202,11 @@ func (gs *GameState) SaveState(stateID int) {
 	gs.saveCharTextData(a)
 	gs.savePalFX(a)
 
-	gs.bcStack = arena.MakeSlice[BytecodeValue](a, len(sys.bcStack), len(sys.bcStack))
+	gs.bcStack = mempool.MakeSlice[BytecodeValue](a, len(sys.bcStack), len(sys.bcStack))
 	copy(gs.bcStack, sys.bcStack)
-	gs.bcVarStack = arena.MakeSlice[BytecodeValue](a, len(sys.bcVarStack), len(sys.bcVarStack))
+	gs.bcVarStack = mempool.MakeSlice[BytecodeValue](a, len(sys.bcVarStack), len(sys.bcVarStack))
 	copy(gs.bcVarStack, sys.bcVarStack)
-	gs.bcVar = arena.MakeSlice[BytecodeValue](a, len(sys.bcVar), len(sys.bcVar))
+	gs.bcVar = mempool.MakeSlice[BytecodeValue](a, len(sys.bcVar), len(sys.bcVar))
 	copy(gs.bcVar, sys.bcVar)
 
 	// We only save the stage's state if any existing characters can modify it
@@ -219,9 +219,9 @@ func (gs *GameState) SaveState(stateID int) {
 		gs.stage = sys.stage.Clone(a, gsp)
 	}
 
-	gs.workBe = arena.MakeSlice[BytecodeExp](a, len(sys.workBe), len(sys.workBe))
+	gs.workBe = mempool.MakeSlice[BytecodeExp](a, len(sys.workBe), len(sys.workBe))
 	for i := 0; i < len(sys.workBe); i++ {
-		gs.workBe[i] = arena.MakeSlice[OpCode](a, len(sys.workBe[i]), len(sys.workBe[i]))
+		gs.workBe[i] = mempool.MakeSlice[OpCode](a, len(sys.workBe[i]), len(sys.workBe[i]))
 		copy(gs.workBe[i], sys.workBe[i])
 	}
 
@@ -230,7 +230,7 @@ func (gs *GameState) SaveState(stateID int) {
 	//gs.debugDisplay = sys.debugDisplay
 
 	// Things that directly or indirectly get put into CGO can't go into arenas
-	gs.workpal = make([]uint32, len(sys.workpal)) //arena.MakeSlice[uint32](a, len(sys.workpal), len(sys.workpal))
+	gs.workpal = make([]uint32, len(sys.workpal)) //mempool.MakeSlice[uint32](a, len(sys.workpal), len(sys.workpal))
 	copy(gs.workpal, sys.workpal)
 
 	gs.fightScreen = sys.fightScreen.Clone(a)
@@ -244,9 +244,9 @@ func (gs *GameState) SaveState(stateID int) {
 		gs.storyboard.active = false
 	}
 
-	gs.timerRounds = arena.MakeSlice[int32](a, len(sys.timerRounds), len(sys.timerRounds))
+	gs.timerRounds = mempool.MakeSlice[int32](a, len(sys.timerRounds), len(sys.timerRounds))
 	copy(gs.timerRounds, sys.timerRounds)
-	gs.scoreRounds = arena.MakeSlice[[2]float32](a, len(sys.scoreRounds), len(sys.scoreRounds))
+	gs.scoreRounds = mempool.MakeSlice[[2]float32](a, len(sys.scoreRounds), len(sys.scoreRounds))
 	copy(gs.scoreRounds, sys.scoreRounds)
 
 	//gs.sel = sys.sel.Clone(a)
@@ -256,10 +256,10 @@ func (gs *GameState) SaveState(stateID int) {
 
 	gs.dialogueFlg = sys.motif.di.active
 
-	gs.timerCount = arena.MakeSlice[int32](a, len(sys.timerCount), len(sys.timerCount))
+	gs.timerCount = mempool.MakeSlice[int32](a, len(sys.timerCount), len(sys.timerCount))
 	copy(gs.timerCount, sys.timerCount)
 
-	gs.commandLists = arena.MakeSlice[*CommandList](a, len(sys.commandLists), len(sys.commandLists))
+	gs.commandLists = mempool.MakeSlice[*CommandList](a, len(sys.commandLists), len(sys.commandLists))
 	for i := 0; i < len(sys.commandLists); i++ {
 		cl := sys.commandLists[i].Clone(a)
 		gs.commandLists[i] = &cl
@@ -271,20 +271,20 @@ func (gs *GameState) SaveState(stateID int) {
 	}
 }
 
-func (src *CommandList) CopyTo(dst *CommandList, a *arena.Arena) {
+func (src *CommandList) CopyTo(dst *CommandList, a *mempool.Arena) {
 	clone := src.Clone(a)
 	*dst = clone
 }
 
-func (gs *GameState) savePalFX(a *arena.Arena) {
+func (gs *GameState) savePalFX(a *mempool.Arena) {
 	gs.allPalFX = sys.allPalFX.Clone(a)
 	gs.bgPalFX = sys.bgPalFX.Clone(a)
 }
 
-func (gs *GameState) saveCharData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) saveCharData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := range sys.chars {
-		gs.charData[i] = arena.MakeSlice[Char](a, len(sys.chars[i]), len(sys.chars[i]))
-		gs.chars[i] = arena.MakeSlice[*Char](a, len(sys.chars[i]), len(sys.chars[i]))
+		gs.charData[i] = mempool.MakeSlice[Char](a, len(sys.chars[i]), len(sys.chars[i]))
+		gs.chars[i] = mempool.MakeSlice[*Char](a, len(sys.chars[i]), len(sys.chars[i]))
 
 		for j, c := range sys.chars[i] {
 			gs.charData[i][j] = c.Clone(a, gsp)
@@ -305,41 +305,41 @@ func (gs *GameState) saveCharData(a *arena.Arena, gsp *GameStatePool) {
 	gs.charList = sys.charList.Clone(a, gsp)
 }
 
-func (gs *GameState) saveProjectileData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) saveProjectileData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := range sys.projs {
-		gs.projs[i] = arena.MakeSlice[*Projectile](a, len(sys.projs[i]), len(sys.projs[i]))
+		gs.projs[i] = mempool.MakeSlice[*Projectile](a, len(sys.projs[i]), len(sys.projs[i]))
 		for j := 0; j < len(sys.projs[i]); j++ {
 			gs.projs[i][j] = sys.projs[i][j].clone(a, gsp)
 		}
 	}
 }
 
-func (gs *GameState) saveExplodData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) saveExplodData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := range sys.explods {
-		gs.explods[i] = arena.MakeSlice[*Explod](a, len(sys.explods[i]), len(sys.explods[i]))
+		gs.explods[i] = mempool.MakeSlice[*Explod](a, len(sys.explods[i]), len(sys.explods[i]))
 		for j := 0; j < len(sys.explods[i]); j++ {
 			gs.explods[i][j] = sys.explods[i][j].Clone(a, gsp)
 		}
 	}
 }
 
-func (gs *GameState) saveCharTextData(a *arena.Arena) {
+func (gs *GameState) saveCharTextData(a *mempool.Arena) {
 	for i := range sys.chartexts {
-		gs.chartexts[i] = arena.MakeSlice[*TextSprite](a, len(sys.chartexts[i]), len(sys.chartexts[i]))
+		gs.chartexts[i] = mempool.MakeSlice[*TextSprite](a, len(sys.chartexts[i]), len(sys.chartexts[i]))
 		for j := range sys.chartexts[i] {
 			gs.chartexts[i][j] = cloneTextSprite(a, sys.chartexts[i][j])
 		}
 	}
 }
 
-func (gs *GameState) loadPalFX(a *arena.Arena) {
+func (gs *GameState) loadPalFX(a *mempool.Arena) {
 	sys.allPalFX = gs.allPalFX.Clone(a)
 	sys.bgPalFX = gs.bgPalFX.Clone(a)
 }
 
-func (gs *GameState) loadCharData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) loadCharData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := 0; i < len(sys.chars); i++ {
-		sys.chars[i] = arena.MakeSlice[*Char](a, len(gs.chars[i]), len(gs.chars[i]))
+		sys.chars[i] = mempool.MakeSlice[*Char](a, len(gs.chars[i]), len(gs.chars[i]))
 		copy(sys.chars[i], gs.chars[i])
 	}
 
@@ -367,27 +367,27 @@ func (gs *GameState) loadCharData(a *arena.Arena, gsp *GameStatePool) {
 	sys.charList = gs.charList.Clone(a, gsp)
 }
 
-func (gs *GameState) loadProjectileData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) loadProjectileData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := range gs.projs {
-		sys.projs[i] = arena.MakeSlice[*Projectile](a, len(gs.projs[i]), len(gs.projs[i]))
+		sys.projs[i] = mempool.MakeSlice[*Projectile](a, len(gs.projs[i]), len(gs.projs[i]))
 		for j := range gs.projs[i] {
 			sys.projs[i][j] = gs.projs[i][j].clone(a, gsp)
 		}
 	}
 }
 
-func (gs *GameState) loadExplodData(a *arena.Arena, gsp *GameStatePool) {
+func (gs *GameState) loadExplodData(a *mempool.Arena, gsp *GameStatePool) {
 	for i := range gs.explods {
-		sys.explods[i] = arena.MakeSlice[*Explod](a, len(gs.explods[i]), len(gs.explods[i]))
+		sys.explods[i] = mempool.MakeSlice[*Explod](a, len(gs.explods[i]), len(gs.explods[i]))
 		for j := 0; j < len(gs.explods[i]); j++ {
 			sys.explods[i][j] = gs.explods[i][j].Clone(a, gsp)
 		}
 	}
 }
 
-func (gs *GameState) loadCharTextData(a *arena.Arena) {
+func (gs *GameState) loadCharTextData(a *mempool.Arena) {
 	for i := range gs.chartexts {
-		sys.chartexts[i] = arena.MakeSlice[*TextSprite](a, len(gs.chartexts[i]), len(gs.chartexts[i]))
+		sys.chartexts[i] = mempool.MakeSlice[*TextSprite](a, len(gs.chartexts[i]), len(gs.chartexts[i]))
 		for j := range gs.chartexts[i] {
 			sys.chartexts[i][j] = cloneTextSprite(a, gs.chartexts[i][j])
 		}

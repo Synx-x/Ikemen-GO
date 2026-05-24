@@ -1,7 +1,7 @@
 package main
 
 import (
-	"arena"
+	"github.com/ikemen-engine/Ikemen-GO/src/mempool"
 	"bufio"
 	"fmt"
 	"image"
@@ -173,8 +173,8 @@ var sys = System{
 	savePool:         NewGameStatePool(),
 	loadPool:         NewGameStatePool(),
 	commandLists:     make([]*CommandList, 0),
-	arenaSaveMap:     make(map[int]*arena.Arena),
-	arenaLoadMap:     make(map[int]*arena.Arena),
+	arenaSaveMap:     make(map[int]*mempool.Arena),
+	arenaLoadMap:     make(map[int]*mempool.Arena),
 	debugAccel:       1, // TODO: We probably shouldn't rely on this being initialized to 1
 	charVarsBackup:   make(map[int]CharVarBackup),
 	SystemStateVars: SystemStateVars{
@@ -305,8 +305,8 @@ type System struct {
 
 	statePool       GameStatePool
 	commandLists    []*CommandList
-	arenaSaveMap    map[int]*arena.Arena
-	arenaLoadMap    map[int]*arena.Arena
+	arenaSaveMap    map[int]*mempool.Arena
+	arenaLoadMap    map[int]*mempool.Arena
 	rollbackStateID int
 	savePool        GameStatePool
 	loadPool        GameStatePool
