@@ -90,6 +90,59 @@ func main() {
 		return nil
 	}))
 
+	// ikemen.injectKey(code, keyVal, down, mods) — DOM keyboard event bridge
+	// Called from JS event listeners (window.addEventListener keydown/keyup).
+	// Args: code (string), keyVal (int), down (bool), mods (int modifier bitmask).
+	// Pushes DomKeyEvent onto the queue for consumption by DrainDomKeys() in D6.3+.
+	bridge.Set("injectKey", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 4 {
+			logConsole("[ikemen-wasm] injectKey: insufficient args (need code, keyVal, down, mods)")
+			return nil
+		}
+
+		code := args[0].String()
+		keyVal := args[1].Int()
+		down := args[2].Bool()
+		mods := sdlKeymod(args[3].Int())
+
+		injectKeyFromDOM(code, keyVal, down, mods)
+		return nil
+	}))
+
+	// ikemen.lastKeys() — returns last N key events as a JS array for status display.
+	// Each entry is an object: { code: string, down: bool, t: timestamp (ms) }.
+	// Used by the page to show recent keypresses in a status div.
+	bridge.Set("lastKeys", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		maxKeys := 5
+
+		domKeyMutex.Lock()
+		defer domKeyMutex.Unlock()
+
+		resultLen := len(domKeyQueue)
+		if resultLen > maxKeys {
+			resultLen = maxKeys
+		}
+
+		// Return the last N keys from the queue
+		result := js.Global().Get("Array").New()
+		start := len(domKeyQueue) - resultLen
+		if start < 0 {
+			start = 0
+		}
+
+		idx := 0
+		for _, evt := range domKeyQueue[start:] {
+			entry := js.Global().Get("Object").New()
+			entry.Set("code", evt.Code)
+			entry.Set("down", evt.Down)
+			entry.Set("t", js.Global().Get("performance").Call("now").Float())
+			result.SetIndex(idx, entry)
+			idx++
+		}
+
+		return result
+	}))
+
 	js.Global().Set("ikemen", bridge)
 	logConsole("[ikemen-wasm] JS bridge ready as window.ikemen")
 
