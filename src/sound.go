@@ -10,18 +10,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/effects"
 
-	"github.com/gopxl/beep/v2/flac"
-	"github.com/gopxl/beep/v2/midi"
-	"github.com/gopxl/beep/v2/mp3"
-	"github.com/gopxl/beep/v2/vorbis"
-	"github.com/gopxl/beep/v2/wav"
 )
 
 const (
-	audioOutLen    = 2048
+	audioOutLen  = 2048
 	audioFrequency = 44100
 	audioPrecision = 4
 )
@@ -30,12 +23,12 @@ const (
 // Normalizer
 
 type Normalizer struct {
-	streamer beep.Streamer
-	mul      float64
-	l, r     *NormalizerLR
+	streamer Streamer
+	mul   float64
+	l, r   *NormalizerLR
 }
 
-func NewNormalizer(st beep.Streamer) *Normalizer {
+func NewNormalizer(st Streamer) *Normalizer {
 	return &Normalizer{streamer: st, mul: 4,
 		l: &NormalizerLR{1, 0, 1, 1 / 32.0, 0, 0},
 		r: &NormalizerLR{1, 0, 1, 1 / 32.0, 0, 0}}
@@ -108,19 +101,19 @@ func WithSpeakerLock(f func()) {
 }
 
 // ------------------------------------------------------------------
-// SwapSeeker - beep.StreamSeeker that can be swapped to in-memory
+// SwapSeeker - StreamSeeker that can be swapped to in-memory
 // copy at runtime.
 type SwapSeeker struct {
-	mu sync.RWMutex      // read/write mutex
-	ss beep.StreamSeeker // current source
+	mu sync.RWMutex   // read/write mutex
+	ss StreamSeeker // current source
 }
 
-func newSwapSeeker(ss beep.StreamSeeker) *SwapSeeker {
+func newSwapSeeker(ss StreamSeeker) *SwapSeeker {
 	return &SwapSeeker{ss: ss}
 }
 
 // Swap(next, absStart): next - new seeker
-func (sw *SwapSeeker) Swap(next beep.StreamSeeker) {
+func (sw *SwapSeeker) Swap(next StreamSeeker) {
 	speaker.Lock()
 	sw.mu.Lock()
 	pos := sw.ss.Position()
@@ -176,15 +169,15 @@ func (sw *SwapSeeker) Err() error {
 }
 
 // ------------------------------------------------------------------
-// BufferSeeker ‒ wraps *beep.Buffer and gives an in-memory
+// BufferSeeker ‒ wraps * Buffer and gives an in-memory
 // StreamSeeker
 type BufferSeeker struct {
-	buf *beep.Buffer  // the decoded audio buffer
-	pos int           // absolute position in samples
-	str beep.Streamer // current streamer
+	buf * Buffer // the decoded audio buffer
+	pos int      // absolute position in samples
+	str Streamer // current streamer
 }
 
-func newBufferSeeker(buf *beep.Buffer) *BufferSeeker {
+func newBufferSeeker(buf * Buffer) *BufferSeeker {
 	return &BufferSeeker{
 		buf: buf,
 		str: buf.Streamer(0, buf.Len()),
@@ -222,19 +215,19 @@ func (b *BufferSeeker) Err() error { return nil }
 
 // Based on Loop() from Beep package. It adds support for loop points.
 type StreamLooper struct {
-	s         beep.StreamSeeker
+	s     StreamSeeker
 	loopcount int
 	loopstart int
-	loopend   int
-	err       error
+	loopend  int
+	err    error
 }
 
-func newStreamLooper(s beep.StreamSeeker, loopcount, loopstart, loopend int) beep.StreamSeeker {
+func newStreamLooper(s StreamSeeker, loopcount, loopstart, loopend int) StreamSeeker {
 	sl := &StreamLooper{
-		s:         s,
+		s:     s,
 		loopcount: loopcount,
 		loopstart: loopstart,
-		loopend:   loopend,
+		loopend:  loopend,
 	}
 	if sl.loopstart < 0 || sl.loopstart >= s.Len() {
 		sl.loopstart = 0
@@ -245,7 +238,7 @@ func newStreamLooper(s beep.StreamSeeker, loopcount, loopstart, loopend int) bee
 	return sl
 }
 
-// Adapted from beep.Loop2 (for dynamic modification)
+// Adapted from Loop2 (for dynamic modification)
 func (l *StreamLooper) Stream(samples [][2]float64) (n int, ok bool) {
 	if l.err != nil {
 		return 0, false
@@ -300,20 +293,20 @@ func (b *StreamLooper) Seek(p int) error {
 // Bgm
 
 type Bgm struct {
-	filename           string
-	bgmVolume          int
-	volRestore         int
+	filename      string
+	bgmVolume     int
+	volRestore     int
 	pauseVolumeApplied bool
-	loop               int
-	streamer           beep.StreamSeeker
-	ctrl               *beep.Ctrl
-	volctrl            *effects.Volume
-	format             string
-	freqmul            float32
-	sampleRate         beep.SampleRate
-	startPos           int
-	mu                 sync.Mutex
-	cancel             context.CancelFunc
+	loop        int
+	streamer      StreamSeeker
+	ctrl        * Ctrl
+	volctrl      *EffectsVolume
+	format       string
+	freqmul      float32
+	sampleRate     SampleRate
+	startPos      int
+	mu         sync.Mutex
+	cancel       context.CancelFunc
 }
 
 func newBgm() *Bgm {
@@ -364,24 +357,24 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 		LogMessage("Failed to open BGM: %v", err)
 		return
 	}
-	var format beep.Format
+	var format Format
 	if HasExtension(bgm.filename, ".ogg") {
-		bgm.streamer, format, err = vorbis.Decode(f)
+		bgm.streamer, format, err = DecodeVorbis(f)
 		bgm.format = "ogg"
 	} else if HasExtension(bgm.filename, ".mp3") {
-		bgm.streamer, format, err = mp3.Decode(f)
+		bgm.streamer, format, err = DecodeMP3(f)
 		bgm.format = "mp3"
 	} else if HasExtension(bgm.filename, ".wav") {
-		bgm.streamer, format, err = wav.Decode(f)
+		bgm.streamer, format, err = DecodeWav(f)
 		bgm.format = "wav"
 	} else if HasExtension(bgm.filename, ".flac") {
-		bgm.streamer, format, err = flac.Decode(f)
+		bgm.streamer, format, err = DecodeFlac(f)
 		bgm.format = "flac"
 	} else if HasExtension(bgm.filename, ".mid") || HasExtension(bgm.filename, ".midi") {
 		if sf, sferr := loadSoundFont(sys.cfg.Sound.SoundFont); sferr != nil {
 			err = sferr
 		} else {
-			bgm.streamer, format, err = midi.Decode(f, sf, beep.SampleRate(int(sys.cfg.Sound.SampleRate)))
+			bgm.streamer, format, err = DecodeMidi(f, sf, SampleRate(int(sys.cfg.Sound.SampleRate)))
 			bgm.format = "midi"
 		}
 	} else if HasExtension(bgm.filename, ".xm") || HasExtension(bgm.filename, ".mod") || HasExtension(bgm.filename, ".it") || HasExtension(bgm.filename, ".s3m") {
@@ -422,11 +415,11 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 	streamer := newStreamLooper(sw, lc, bgmLoopStart, bgmLoopEnd)
 	// we're going to continue to use our own modified streamLooper because beep doesn't allow
 	// negative values for loopcount (no forever case)
-	bgm.volctrl = &effects.Volume{Streamer: streamer, Base: 2, Volume: 0, Silent: true}
+	bgm.volctrl = &EffectsVolume{Streamer: streamer, Base: 2, Volume: 0, Silent: true}
 	bgm.sampleRate = format.SampleRate
-	dstFreq := beep.SampleRate(float32(sys.cfg.Sound.SampleRate) / bgm.freqmul)
-	resampler := beep.Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), bgm.sampleRate, dstFreq, bgm.volctrl)
-	bgm.ctrl = &beep.Ctrl{Streamer: resampler}
+	dstFreq := SampleRate(float32(sys.cfg.Sound.SampleRate) / bgm.freqmul)
+	resampler := Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), bgm.sampleRate, dstFreq, bgm.volctrl)
+	bgm.ctrl = & Ctrl{Streamer: resampler}
 	if sys.paused && sys.pauseVolumeApplied {
 		// A new BGM can start while the game is already paused.
 		bgm.volRestore = bgm.bgmVolume
@@ -480,23 +473,23 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 			}
 
 			// We gotta re-decode this crap again (but it won't matter since we're on a different thread)
-			var dec beep.StreamSeeker
+			var dec StreamSeeker
 			switch bgm.format {
 			case "ogg":
-				dec, _, err = vorbis.Decode(lf)
+				dec, _, err = DecodeVorbis(lf)
 			case "mp3":
-				dec, _, err = mp3.Decode(lf)
+				dec, _, err = DecodeMP3(lf)
 			case "wav":
-				dec, _, err = wav.Decode(lf)
+				dec, _, err = DecodeWav(lf)
 			case "flac":
-				dec, _, err = flac.Decode(lf)
+				dec, _, err = DecodeFlac(lf)
 			case "midi":
 				sf, e := loadSoundFont(sys.cfg.Sound.SoundFont)
 				if e != nil {
 					LogMessage(e.Error())
 					return
 				}
-				dec, _, err = midi.Decode(lf, sf, bgm.sampleRate)
+				dec, _, err = DecodeMidi(lf, sf, bgm.sampleRate)
 			}
 			if err != nil {
 				LogMessage(err.Error())
@@ -505,8 +498,8 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 
 			// build RAM buffer with loop span
 			dec.Seek(0)
-			buf := beep.NewBuffer(format)
-			buf.Append(beep.Take(dec.Len(), dec))
+			buf := NewBuffer(format)
+			buf.Append( Take(dec.Len(), dec))
 
 			// close if this decoder supports it (all but MIDI)
 			if c, ok := dec.(io.Closer); ok {
@@ -539,12 +532,12 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 	}
 }
 
-func loadSoundFont(filename string) (*midi.SoundFont, error) {
+func loadSoundFont(filename string) (*MidiSoundFont, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	soundfont, err := midi.NewSoundFont(f)
+	soundfont, err := NewMidiSoundFont(f)
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -572,7 +565,7 @@ func (bgm *Bgm) UpdateVolume() {
 	}
 
 	// NOTE: This is what we're going to do, no matter the complaints, because BGMVolume is handled differently
-	// than WAV volume anyway.  We've had problems changing this in the past so it's best to keep it as-is.
+	// than WAV volume anyway. We've had problems changing this in the past so it's best to keep it as-is.
 	volume := -5 + float64(sys.cfg.Sound.BGMVolume)*0.06*(float64(sys.cfg.Sound.MasterVolume)/100)*(float64(bgm.bgmVolume)/100)
 
 	// clamp to 1
@@ -596,8 +589,8 @@ func (bgm *Bgm) SetFreqMul(freqmul float32) {
 				return
 			}
 			srcRate := bgm.sampleRate
-			dstRate := beep.SampleRate(float32(sys.cfg.Sound.SampleRate) / freqmul)
-			if resampler, ok := bgm.ctrl.Streamer.(*beep.Resampler); ok {
+			dstRate := SampleRate(float32(sys.cfg.Sound.SampleRate) / freqmul)
+			if resampler, ok := bgm.ctrl.Streamer.(* Resampler); ok {
 				WithSpeakerLock(func() {
 					resampler.SetRatio(float64(srcRate) / float64(dstRate))
 					bgm.freqmul = freqmul
@@ -609,7 +602,7 @@ func (bgm *Bgm) SetFreqMul(freqmul float32) {
 
 // OpenFromStreamer wires an arbitrary Beep streamer (e.g. Reisen-backed audio)
 // into the existing BGM path so the video BGM replaces/uses the same channel.
-func (bgm *Bgm) OpenFromStreamer(stream beep.Streamer, srcSampleRate beep.SampleRate, bgmVolume int) {
+func (bgm *Bgm) OpenFromStreamer(stream Streamer, srcSampleRate SampleRate, bgmVolume int) {
 	// Right away, cancel any running goroutines.
 	bgm.mu.Lock()
 	if bgm.cancel != nil {
@@ -643,10 +636,10 @@ func (bgm *Bgm) OpenFromStreamer(stream beep.Streamer, srcSampleRate beep.Sample
 
 	// Build the standard BGM chain: Volume -> Resample -> Ctrl -> Mixer
 	bgm.sampleRate = srcSampleRate
-	bgm.volctrl = &effects.Volume{Streamer: stream, Base: 2, Volume: 0, Silent: true}
-	dstFreq := beep.SampleRate(float32(sys.cfg.Sound.SampleRate) / bgm.freqmul)
-	resampler := beep.Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), bgm.sampleRate, dstFreq, bgm.volctrl)
-	bgm.ctrl = &beep.Ctrl{Streamer: resampler}
+	bgm.volctrl = &EffectsVolume{Streamer: stream, Base: 2, Volume: 0, Silent: true}
+	dstFreq := SampleRate(float32(sys.cfg.Sound.SampleRate) / bgm.freqmul)
+	resampler := Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), bgm.sampleRate, dstFreq, bgm.volctrl)
+	bgm.ctrl = & Ctrl{Streamer: resampler}
 	if sys.paused && sys.pauseVolumeApplied {
 		// A video-backed BGM can also be attached while pause is active.
 		bgm.volRestore = bgm.bgmVolume
@@ -699,8 +692,8 @@ func (bgm *Bgm) Seek(positionSample int) {
 
 type Sound struct {
 	wavData []byte
-	format  beep.Format
-	length  int
+	format  Format
+	length int
 }
 
 func readSound(f io.ReadSeekCloser, size uint32) (*Sound, error) {
@@ -712,7 +705,7 @@ func readSound(f io.ReadSeekCloser, size uint32) (*Sound, error) {
 		return nil, err
 	}
 	// Decode the sound at least once, so that we know the format is OK
-	s, wavfmt, err := wav.Decode(bytes.NewReader(wavData))
+	s, wavfmt, err := DecodeWav(bytes.NewReader(wavData))
 	if err != nil {
 		return nil, err
 	}
@@ -752,8 +745,8 @@ func readSound(f io.ReadSeekCloser, size uint32) (*Sound, error) {
 	return &Sound{wavData, wavfmt, s.Len()}, nil
 }
 
-func (s *Sound) GetStreamer() beep.StreamSeeker {
-	streamer, _, _ := wav.Decode(bytes.NewReader(s.wavData))
+func (s *Sound) GetStreamer() StreamSeeker {
+	streamer, _, _ := DecodeWav(bytes.NewReader(s.wavData))
 	return streamer
 }
 
@@ -761,9 +754,9 @@ func (s *Sound) GetStreamer() beep.StreamSeeker {
 // Snd
 
 type Snd struct {
-	table     map[[2]int32]*Sound
+	table   map[[2]int32]*Sound
 	ver, ver2 uint16
-	filename  string
+	filename string
 }
 
 func newSnd() *Snd {
@@ -916,14 +909,14 @@ func loadFromSnd(filename string, g, s int32, max uint32) (*Sound, error) {
 // SoundEffect (handles volume and panning)
 
 type SoundEffect struct {
-	streamer beep.Streamer
-	volume   float32
+	streamer Streamer
+	volume  float32
 	localscl float32
-	pan      float32
-	x        *float32
+	pan   float32
+	x    *float32
 	priority int32
-	loop     int32
-	freqmul  float32
+	loop   int32
+	freqmul float32
 	startPos int
 }
 
@@ -959,18 +952,18 @@ func (s *SoundEffect) Err() error {
 // SoundChannel
 
 type SoundChannel struct {
-	streamer           beep.StreamSeeker
-	sfx                *SoundEffect
-	ctrl               *beep.Ctrl
-	sound              *Sound
-	playerID           int32
-	channelNo          int32 // Logical channel assigned by char code
-	stopOnGetHit       bool
-	stopOnChangeState  bool
-	group              int32
-	number             int32
-	timeStamp          int32
-	volResume          float32 // For pausing/unpausing
+	streamer      StreamSeeker
+	sfx        *SoundEffect
+	ctrl        * Ctrl
+	sound       *Sound
+	playerID      int32
+	channelNo     int32 // Logical channel assigned by char code
+	stopOnGetHit    bool
+	stopOnChangeState bool
+	group       int32
+	number       int32
+	timeStamp     int32
+	volResume     float32 // For pausing/unpausing
 	pauseVolumeApplied bool
 }
 
@@ -1017,13 +1010,13 @@ func (s *SoundChannel) Play(sound *Sound, group, number, loop int32, freqmul flo
 		loopCount = Max(0, int(loop-1))
 	}
 
-	// going to continue using our streamLooper which is now modified from beep.Loop2
+	// going to continue using our streamLooper which is now modified from Loop2
 	looper := newStreamLooper(s.streamer, loopCount, loopStart, loopEnd)
 	s.sfx = &SoundEffect{streamer: looper, volume: 256, priority: 0, loop: int32(loopCount), freqmul: freqmul, startPos: startPosition}
 	srcRate := s.sound.format.SampleRate
-	dstRate := beep.SampleRate(float32(sys.cfg.Sound.SampleRate) / s.sfx.freqmul)
-	resampler := beep.Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), srcRate, dstRate, s.sfx)
-	s.ctrl = &beep.Ctrl{Streamer: resampler}
+	dstRate := SampleRate(float32(sys.cfg.Sound.SampleRate) / s.sfx.freqmul)
+	resampler := Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), srcRate, dstRate, s.sfx)
+	s.ctrl = & Ctrl{Streamer: resampler}
 	s.streamer.Seek(startPosition)
 
 	WithSpeakerLock(func() {
@@ -1074,8 +1067,8 @@ func (s *SoundChannel) SetFreqMul(freqmul float32) {
 				return
 			}
 			srcRate := s.sound.format.SampleRate
-			dstRate := beep.SampleRate(float32(sys.cfg.Sound.SampleRate) / freqmul)
-			if resampler, ok := s.ctrl.Streamer.(*beep.Resampler); ok {
+			dstRate := SampleRate(float32(sys.cfg.Sound.SampleRate) / freqmul)
+			if resampler, ok := s.ctrl.Streamer.(* Resampler); ok {
 				WithSpeakerLock(func() {
 					resampler.SetRatio(float64(srcRate) / float64(dstRate))
 					s.sfx.freqmul = freqmul

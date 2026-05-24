@@ -18,182 +18,181 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gopxl/beep/v2"
 
 	//glfont "github.com/ikemen-engine/glfont"
 	lua "github.com/yuin/gopher-lua"
 )
 
 const (
-	MaxSimul        = 4
+	MaxSimul    = 4
 	MaxAttachedChar = 4
-	MaxPlayerNo     = MaxSimul*2 + MaxAttachedChar
+	MaxPlayerNo   = MaxSimul*2 + MaxAttachedChar
 )
 
 // The variables placed in this struct will be saved/loaded automatically by game states
 // Note: Still need to deep copy pointers etc like usual
 // TODO: Testing the changes and cleaning up
 type SystemStateVars struct {
-	randseed          int32
-	matchTime         int32
-	curRoundTime      int32
+	randseed     int32
+	matchTime     int32
+	curRoundTime   int32
 	persistRoundCount int32
-	curPlayTime       int32
+	curPlayTime    int32
 
-	aiInput    [MaxPlayerNo]AiInput
-	ffbparams  [MaxPlayerNo]ForceFeedbackParams
+	aiInput  [MaxPlayerNo]AiInput
+	ffbparams [MaxPlayerNo]ForceFeedbackParams
 	inputRemap [MaxPlayerNo]int
-	aiLevel    [MaxPlayerNo]float32
-	cam        Camera
+	aiLevel  [MaxPlayerNo]float32
+	cam    Camera
 
-	pausetime          int32
-	pausebg            bool
+	pausetime     int32
+	pausebg      bool
 	pauseendcmdbuftime int32
-	pausetimebuffer    int32
-	pauseplayerno      int
-	supertimebuffer    int32
-	supertime          int32
-	superpausebg       bool
+	pausetimebuffer  int32
+	pauseplayerno   int
+	supertimebuffer  int32
+	supertime     int32
+	superpausebg    bool
 	superendcmdbuftime int32
-	superplayerno      int
-	superbrightness    float32
+	superplayerno   int
+	superbrightness  float32
 
-	envShake    EnvShake
+	envShake  EnvShake
 	specialFlag GlobalSpecialFlag
-	envcol      [3]int32
+	envcol   [3]int32
 	envcol_time int32
 
-	scrrect                 [4]int32
-	gameWidth, gameHeight   float32
+	scrrect         [4]int32
+	gameWidth, gameHeight  float32
 	widthScale, heightScale float32
-	gameEnd, frameSkip      bool
-	paused, frameStepFlag   bool
-	brightness              float32
-	brightnessOld           float32
-	maxRoundTime            int32
-	curFramesPerCount       int32 // The mutatable value for the current match
-	match                   int32
-	round                   int32
-	intro                   int32
-	lastHitter              [2]int
-	winTeam                 int
-	winType                 [2]WinType
-	winTrigger              [2]WinType
-	matchWins, wins         [2]int32 // Required wins, current wins
-	roundsExisted           [2]int32
-	draws                   int32
-	maxDraws                [2]int32
-	effectiveLoss           [2]bool
-	tmode                   [2]TeamMode
-	numSimul, numTurns      [2]int32
-	esc                     bool
-	envcol_under            bool
-	lastCharId              int32
-	tickCount               int
-	oldTickCount            int
-	tickCountF              float32
-	lastTick                float32
-	nextAddTime             float32
-	oldNextAddTime          float32
-	xmin, xmax              float32
-	zmin, zmax              float32
-	winskipped              bool
-	roundResetFlg           bool
-	roundResetMatchStart    bool
-	reloadFlg               bool
-	reloadStageFlg          bool
-	reloadFightScreenFlg    bool
-	reloadCharSlot          [MaxPlayerNo]bool
-	turbo                   float32
-	zoom                    ZoomEffect
-	finishType              FinishType
-	winwaittime             int32
-	slowtime                int32
-	changeStateNest         int32
-	nomusic                 bool
-	timerStart              int32
-	teamLeader              [2]int
-	postMatchFlg            bool
-	scoreStart              [2]float32
-	decisiveRound           [2]bool
-	gameMode                string
+	gameEnd, frameSkip   bool
+	paused, frameStepFlag  bool
+	brightness       float32
+	brightnessOld      float32
+	maxRoundTime      int32
+	curFramesPerCount    int32 // The mutatable value for the current match
+	match          int32
+	round          int32
+	intro          int32
+	lastHitter       [2]int
+	winTeam         int
+	winType         [2]WinType
+	winTrigger       [2]WinType
+	matchWins, wins     [2]int32 // Required wins, current wins
+	roundsExisted      [2]int32
+	draws          int32
+	maxDraws        [2]int32
+	effectiveLoss      [2]bool
+	tmode          [2]TeamMode
+	numSimul, numTurns   [2]int32
+	esc           bool
+	envcol_under      bool
+	lastCharId       int32
+	tickCount        int
+	oldTickCount      int
+	tickCountF       float32
+	lastTick        float32
+	nextAddTime       float32
+	oldNextAddTime     float32
+	xmin, xmax       float32
+	zmin, zmax       float32
+	winskipped       bool
+	roundResetFlg      bool
+	roundResetMatchStart  bool
+	reloadFlg        bool
+	reloadStageFlg     bool
+	reloadFightScreenFlg  bool
+	reloadCharSlot     [MaxPlayerNo]bool
+	turbo          float32
+	zoom          ZoomEffect
+	finishType       FinishType
+	winwaittime       int32
+	slowtime        int32
+	changeStateNest     int32
+	nomusic         bool
+	timerStart       int32
+	teamLeader       [2]int
+	postMatchFlg      bool
+	scoreStart       [2]float32
+	decisiveRound      [2]bool
+	gameMode        string
 
 	consecutiveWins [2]int32
-	firstAttack     [3]int
-	home            int
-	stageLoop       bool
+	firstAttack   [3]int
+	home      int
+	stageLoop    bool
 	dialogueBarsFlg bool
-	dialogueForce   int
-	playBgmFlg      bool
+	dialogueForce  int
+	playBgmFlg   bool
 
-	keyInput            Key
-	keyString           string
+	keyInput      Key
+	keyString      string
 	lastInputController int
-	uiLastInputToken    string
+	uiLastInputToken  string
 	uiConsumeInputFrame int32
-	uiRepeatToken       string
-	uiRepeatController  int
-	uiRepeatFrame       int32
+	uiRepeatToken    string
+	uiRepeatController int
+	uiRepeatFrame    int32
 
-	endMatch      bool
-	noSoundFlg    bool
-	fightLoopEnd  bool
-	continueFlg   bool
+	endMatch   bool
+	noSoundFlg  bool
+	fightLoopEnd bool
+	continueFlg  bool
 	matchResetFlg bool
-	stageLoopNo   int
+	stageLoopNo  int
 	introSkipCall bool
-	preMatchTime  int32
-	loopBreak     bool
-	loopContinue  bool
-	winposetime   int32
+	preMatchTime int32
+	loopBreak   bool
+	loopContinue bool
+	winposetime  int32
 }
 
 // sys
 // The only instance of a System struct.
 // Do not create more than 1.
 var sys = System{
-	soundMixer: &beep.Mixer{},
-	bgm:        *newBgm(),
+	soundMixer: & Mixer{},
+	bgm:    *newBgm(),
 	//soundChannels: newSoundChannels(16), // Lazy allocation in Request()
 	allPalFX: newPalFX(),
-	bgPalFX:  newPalFX(),
-	ffx:      make(map[string]*FightFx),
-	//ffxRegexp:         "^(f)|^(s)|^(go)", // https://github.com/ikemen-engine/Ikemen-GO/issues/1620
-	sel:              *newSelect(),
-	keyState:         make(map[Key]bool),
-	loader:           *newLoader(),
+	bgPalFX: newPalFX(),
+	ffx:   make(map[string]*FightFx),
+	//ffxRegexp:     "^(f)|^(s)|^(go)", // https://github.com/ikemen-engine/Ikemen-GO/issues/1620
+	sel:       *newSelect(),
+	keyState:     make(map[Key]bool),
+	loader:      *newLoader(),
 	ignoreMostErrors: true,
-	stageList:        make(map[int32]*Stage),
+	stageList:    make(map[int32]*Stage),
 	stageLocalcoords: make(map[string][2]int32),
-	commandLine:      make(chan string),
-	mainThreadTask:   make(chan func(), 65536),
-	workpal:          make([]uint32, 256),
-	saveState:        NewGameState(),
-	statePool:        NewGameStatePool(),
-	savePool:         NewGameStatePool(),
-	loadPool:         NewGameStatePool(),
-	commandLists:     make([]*CommandList, 0),
-	arenaSaveMap:     make(map[int]*mempool.Arena),
-	arenaLoadMap:     make(map[int]*mempool.Arena),
-	debugAccel:       1, // TODO: We probably shouldn't rely on this being initialized to 1
-	charVarsBackup:   make(map[int]CharVarBackup),
+	commandLine:   make(chan string),
+	mainThreadTask:  make(chan func(), 65536),
+	workpal:     make([]uint32, 256),
+	saveState:    NewGameState(),
+	statePool:    NewGameStatePool(),
+	savePool:     NewGameStatePool(),
+	loadPool:     NewGameStatePool(),
+	commandLists:   make([]*CommandList, 0),
+	arenaSaveMap:   make(map[int]*mempool.Arena),
+	arenaLoadMap:   make(map[int]*mempool.Arena),
+	debugAccel:    1, // TODO: We probably shouldn't rely on this being initialized to 1
+	charVarsBackup:  make(map[int]CharVarBackup),
 	SystemStateVars: SystemStateVars{
-		randseed:            int32(time.Now().UnixNano()),
-		scrrect:             [...]int32{0, 0, 320, 240},
-		gameWidth:           320,
-		gameHeight:          240,
-		widthScale:          1,
-		heightScale:         1,
-		brightness:          1,
-		maxRoundTime:        -1,
-		match:               1,
-		numSimul:            [...]int32{2, 2},
-		numTurns:            [...]int32{2, 2},
-		oldNextAddTime:      1,
-		cam:                 *newCamera(),
-		keyInput:            KeyUnknown,
+		randseed:      int32(time.Now().UnixNano()),
+		scrrect:       [...]int32{0, 0, 320, 240},
+		gameWidth:      320,
+		gameHeight:     240,
+		widthScale:     1,
+		heightScale:     1,
+		brightness:     1,
+		maxRoundTime:    -1,
+		match:        1,
+		numSimul:      [...]int32{2, 2},
+		numTurns:      [...]int32{2, 2},
+		oldNextAddTime:   1,
+		cam:         *newCamera(),
+		keyInput:      KeyUnknown,
 		lastInputController: -1,
-		uiRepeatController:  -1,
+		uiRepeatController: -1,
 	},
 }
 
@@ -211,117 +210,117 @@ const (
 type System struct {
 	SystemStateVars
 
-	window              *Window
-	redrawWait          struct{ nextTime, lastDraw time.Time }
-	debugFont           *TextSprite
-	debugDisplay        bool
-	debugRef            [2]int // player number, helper index
-	debugLastID         int32
-	soundMixer          *beep.Mixer
-	bgm                 Bgm
-	pauseVolumeApplied  bool
-	soundChannels       SoundChannels // System sounds. Lifebars etc
-	charSoundChannels   [MaxPlayerNo]SoundChannels
-	allPalFX            *PalFX
-	bgPalFX             *PalFX
-	fightScreen         FightScreen
-	motif               Motif
-	storyboard          Storyboard
-	cfg                 Config
-	ffx                 map[string]*FightFx
-	sel                 Select
-	keyState            map[Key]bool
-	netConnection       *NetConnection
-	replayFile          *ReplayFile
-	keyConfig           []KeyConfig
-	joystickConfig      []KeyConfig
-	loader              Loader
-	chars               [MaxPlayerNo][]*Char
-	charList            CharList
-	cgi                 [MaxPlayerNo]CharGlobalInfo
-	loadMutex           sync.Mutex
-	ignoreMostErrors    bool
-	stringPool          [MaxPlayerNo]StringPool
+	window       *Window
+	redrawWait     struct{ nextTime, lastDraw time.Time }
+	debugFont      *TextSprite
+	debugDisplay    bool
+	debugRef      [2]int // player number, helper index
+	debugLastID     int32
+	soundMixer     * Mixer
+	bgm         Bgm
+	pauseVolumeApplied bool
+	soundChannels    SoundChannels // System sounds. Lifebars etc
+	charSoundChannels  [MaxPlayerNo]SoundChannels
+	allPalFX      *PalFX
+	bgPalFX       *PalFX
+	fightScreen     FightScreen
+	motif        Motif
+	storyboard     Storyboard
+	cfg         Config
+	ffx         map[string]*FightFx
+	sel         Select
+	keyState      map[Key]bool
+	netConnection    *NetConnection
+	replayFile     *ReplayFile
+	keyConfig      []KeyConfig
+	joystickConfig   []KeyConfig
+	loader       Loader
+	chars        [MaxPlayerNo][]*Char
+	charList      CharList
+	cgi         [MaxPlayerNo]CharGlobalInfo
+	loadMutex      sync.Mutex
+	ignoreMostErrors  bool
+	stringPool     [MaxPlayerNo]StringPool
 	bcStack, bcVarStack BytecodeStack
-	bcVar               []BytecodeValue
-	workingChar         *Char          // Char currently running its states
-	workingState        *StateBytecode // State currently running
-	stage               *Stage
-	stageList           map[int32]*Stage
-	stageLocalcoords    map[string][2]int32
-	wireframeDisplay    bool
-	shortcutScripts     map[ShortcutKey]*ShortcutScript
-	commandLine         chan string
-	debugWC             *Char
-	projs               [MaxPlayerNo][]*Projectile
-	explods             [MaxPlayerNo][]*Explod
-	explodRunOrder      []*Explod
-	chartexts           [MaxPlayerNo][]*TextSprite // From Text sctrl
-	spriteList          DrawList
-	shadowList          ShadowList
-	reflectionList      ReflectionList
-	afterImageCount     [MaxPlayerNo]int32
-	debugc1hit          DebugClsn
-	debugc1rev          DebugClsn
-	debugc1not          DebugClsn
-	debugc2             DebugClsn
-	debugc2hb           DebugClsn
-	debugc2mtk          DebugClsn
-	debugc2grd          DebugClsn
-	debugc2stb          DebugClsn
-	debugcsize          DebugClsn
-	debugch             DebugClsn
-	debugAccel          float32
-	clsnSpr             Sprite
-	clsnDisplay         bool
-	lifebarHide         bool
-	mainThreadTask      chan func()
-	workpal             []uint32
-	workBe              []BytecodeExp
-	timerCount          []int32
-	cmdFlags            map[string]string
-	whitePalTex         Texture
-	usePalette          bool
-	credits             int32
-	gameRunning         bool
+	bcVar        []BytecodeValue
+	workingChar     *Char     // Char currently running its states
+	workingState    *StateBytecode // State currently running
+	stage        *Stage
+	stageList      map[int32]*Stage
+	stageLocalcoords  map[string][2]int32
+	wireframeDisplay  bool
+	shortcutScripts   map[ShortcutKey]*ShortcutScript
+	commandLine     chan string
+	debugWC       *Char
+	projs        [MaxPlayerNo][]*Projectile
+	explods       [MaxPlayerNo][]*Explod
+	explodRunOrder   []*Explod
+	chartexts      [MaxPlayerNo][]*TextSprite // From Text sctrl
+	spriteList     DrawList
+	shadowList     ShadowList
+	reflectionList   ReflectionList
+	afterImageCount   [MaxPlayerNo]int32
+	debugc1hit     DebugClsn
+	debugc1rev     DebugClsn
+	debugc1not     DebugClsn
+	debugc2       DebugClsn
+	debugc2hb      DebugClsn
+	debugc2mtk     DebugClsn
+	debugc2grd     DebugClsn
+	debugc2stb     DebugClsn
+	debugcsize     DebugClsn
+	debugch       DebugClsn
+	debugAccel     float32
+	clsnSpr       Sprite
+	clsnDisplay     bool
+	lifebarHide     bool
+	mainThreadTask   chan func()
+	workpal       []uint32
+	workBe       []BytecodeExp
+	timerCount     []int32
+	cmdFlags      map[string]string
+	whitePalTex     Texture
+	usePalette     bool
+	credits       int32
+	gameRunning     bool
 
-	msaa               int32
-	externalShaders    [][][]byte
-	windowMainIcon     []image.Image
-	frameCounter       int32
-	captureNum         int
-	timerRounds        []int32
-	scoreRounds        [][2]float32
-	statsLog           StatsLog
-	maxPowerMode       bool
-	debugClsnText      []DebugClsnText
-	consoleText        []string
-	luaLState          *lua.LState
-	statusLFunc        *lua.LFunction
-	listLFunc          []*lua.LFunction
+	msaa        int32
+	externalShaders  [][][]byte
+	windowMainIcon   []image.Image
+	frameCounter    int32
+	captureNum     int
+	timerRounds    []int32
+	scoreRounds    [][2]float32
+	statsLog      StatsLog
+	maxPowerMode    bool
+	debugClsnText   []DebugClsnText
+	consoleText    []string
+	luaLState     *lua.LState
+	statusLFunc    *lua.LFunction
+	listLFunc     []*lua.LFunction
 	reloadPreserveVars [MaxPlayerNo]bool
-	charVarsBackup     map[int]CharVarBackup
-	shaderRefCount     map[string]int
+	charVarsBackup   map[int]CharVarBackup
+	shaderRefCount   map[string]int
 
-	statePool       GameStatePool
-	commandLists    []*CommandList
-	arenaSaveMap    map[int]*mempool.Arena
-	arenaLoadMap    map[int]*mempool.Arena
+	statePool    GameStatePool
+	commandLists  []*CommandList
+	arenaSaveMap  map[int]*mempool.Arena
+	arenaLoadMap  map[int]*mempool.Arena
 	rollbackStateID int
-	savePool        GameStatePool
-	loadPool        GameStatePool
-	rollback        RollbackSystem
-	rollbackConfig  RollbackProperties
-	saveState       *GameState
-	saveStateFlag   bool
-	loadStateFlag   bool
+	savePool    GameStatePool
+	loadPool    GameStatePool
+	rollback    RollbackSystem
+	rollbackConfig RollbackProperties
+	saveState    *GameState
+	saveStateFlag  bool
+	loadStateFlag  bool
 
 	// Match loop variables
 	roundBackup RoundStartBackup
 	matchBackup RoundStartBackup
 
 	// for avg. FPS calculations
-	gameFPS          float32
+	gameFPS     float32
 	gameFPSprevcount uint64
 
 	// screenshot deferral
@@ -329,12 +328,12 @@ type System struct {
 
 	// keepAlive profiling (debug only)
 	keepAliveProfile bool
-	keepAliveOnce    sync.Once
-	keepAlivePrev    time.Time
-	keepAliveStart   time.Time
-	keepAliveCount   int
+	keepAliveOnce  sync.Once
+	keepAlivePrev  time.Time
+	keepAliveStart  time.Time
+	keepAliveCount  int
 
-	luaDrawPreOps   []func()
+	luaDrawPreOps  []func()
 	luaDrawLayerOps [3][]func()
 
 	// UI repeat guard: avoid firing the same token multiple times in the same frame
@@ -348,11 +347,11 @@ type System struct {
 	// Session-wide sync config override for netplay/replay.
 	// Must live on System because rollback temporarily steals sys.netConnection.
 	netplayOverride SessionConfigOverride
-	sessionWarning  string
+	sessionWarning string
 }
 
 type drawAspectState struct {
-	gameWidth, gameHeight   float32
+	gameWidth, gameHeight  float32
 	widthScale, heightScale float32
 }
 
@@ -463,7 +462,7 @@ func (s *System) init(w, h int32) *lua.LState {
 
 	// And the audio.
 	speaker = &SDLSpeaker{}
-	speaker.Init(beep.SampleRate(sys.cfg.Sound.SampleRate), audioOutLen)
+	speaker.Init( SampleRate(sys.cfg.Sound.SampleRate), audioOutLen)
 	speaker.Play(NewNormalizer(s.soundMixer))
 	l := lua.NewState()
 	l.Options.IncludeGoStackTrace = true
@@ -671,9 +670,9 @@ func (s *System) applyFightAspect() {
 
 func (s *System) captureAspectState() drawAspectState {
 	return drawAspectState{
-		gameWidth:   s.gameWidth,
-		gameHeight:  s.gameHeight,
-		widthScale:  s.widthScale,
+		gameWidth:  s.gameWidth,
+		gameHeight: s.gameHeight,
+		widthScale: s.widthScale,
 		heightScale: s.heightScale,
 	}
 }
@@ -1260,10 +1259,10 @@ func (s *System) uiSetConfigDefaults(pn int, joystick bool, enabled map[string]b
 		return
 	}
 	var (
-		kc     *KeyConfig
-		base   string
+		kc   *KeyConfig
+		base  string
 		joyVal int
-		toInt  func(string) int
+		toInt func(string) int
 	)
 	if joystick {
 		if pn > len(s.joystickConfig) {
@@ -1360,11 +1359,11 @@ func (s *System) uiEnsureCommandLists(total int) error {
 	def := []string{"D", "U", "L", "R", "a", "b", "c", "x", "y", "z", "s", "d", "w", "m", "/s"}
 	dcl := NewCommandList(nil)
 	defSpec := CommandSpec{
-		Time:           dcl.DefaultTime,
-		BufTime:        dcl.DefaultBufferTime,
+		Time:      dcl.DefaultTime,
+		BufTime:    dcl.DefaultBufferTime,
 		BufferHitpause: dcl.DefaultBufferHitpause,
 		BufferPauseend: dcl.DefaultBufferPauseEnd,
-		StepTime:       dcl.DefaultStepTime,
+		StepTime:    dcl.DefaultStepTime,
 	}
 	for _, k := range def {
 		spec := defSpec
@@ -4053,13 +4052,13 @@ func (s *System) isSpeculativeFrame() bool {
 
 // The backup to be used when F4 is pressed
 type RoundStartBackup struct {
-	charBackup    [MaxPlayerNo][]Char
-	cgiBackup     [MaxPlayerNo]CharGlobalInfo
-	stageBackup   Stage
-	oldWins       [2]int32
-	oldDraws      int32
+	charBackup  [MaxPlayerNo][]Char
+	cgiBackup   [MaxPlayerNo]CharGlobalInfo
+	stageBackup  Stage
+	oldWins    [2]int32
+	oldDraws   int32
 	oldTeamLeader [2]int
-	lastCharId    int32
+	lastCharId  int32
 }
 
 func (bk *RoundStartBackup) Save() {
@@ -4216,88 +4215,88 @@ func (bk *RoundStartBackup) Restore() {
 }
 
 type SelectChar struct {
-	def           string
-	name          string
-	lifebarname   string
-	author        string
-	sound         string
-	intro         string
-	ending        string
-	arcadepath    string
-	pal           []int32
-	pal_defaults  []int32
-	pal_keymap    []int32
-	pal_files     []string
-	localcoord    [2]int32
+	def      string
+	name     string
+	lifebarname  string
+	author    string
+	sound     string
+	intro     string
+	ending    string
+	arcadepath  string
+	pal      []int32
+	pal_defaults []int32
+	pal_keymap  []int32
+	pal_files   []string
+	localcoord  [2]int32
 	portraitscale float32
-	cns_scale     [2]float32
-	anims         PreloadedAnims
-	sff           *Sff
-	music         Music
-	scp           *SelectCharParams
+	cns_scale   [2]float32
+	anims     PreloadedAnims
+	sff      *Sff
+	music     Music
+	scp      *SelectCharParams
 }
 
 func newSelectChar() *SelectChar {
 	return &SelectChar{
-		localcoord:    [2]int32{320, 240},
+		localcoord:  [2]int32{320, 240},
 		portraitscale: 1,
-		cns_scale:     [2]float32{1, 1},
-		anims:         NewPreloadedAnims(),
-		music:         make(Music),
-		scp:           newSelectCharParams(),
+		cns_scale:   [2]float32{1, 1},
+		anims:     NewPreloadedAnims(),
+		music:     make(Music),
+		scp:      newSelectCharParams(),
 	}
 }
 
 type SelectStage struct {
-	def             string
-	name            string
+	def       string
+	name      string
 	attachedchardef []string
-	localcoord      [2]int32
-	portraitscale   float32
-	anims           PreloadedAnims
-	sff             *Sff
-	music           Music
-	ssp             *SelectStageParams
+	localcoord   [2]int32
+	portraitscale  float32
+	anims      PreloadedAnims
+	sff       *Sff
+	music      Music
+	ssp       *SelectStageParams
 }
 
 func newSelectStage() *SelectStage {
 	return &SelectStage{
-		localcoord:    [2]int32{320, 240},
+		localcoord:  [2]int32{320, 240},
 		portraitscale: 1,
-		anims:         NewPreloadedAnims(),
-		music:         make(Music),
-		ssp:           newSelectStageParams(),
+		anims:     NewPreloadedAnims(),
+		music:     make(Music),
+		ssp:      newSelectStageParams(),
 	}
 }
 
 type Select struct {
-	charlist           []SelectChar
-	stagelist          []SelectStage
-	selected           [2][][2]int
-	selectedStageNo    int
-	charAnimPreload    map[int32]bool
-	stageAnimPreload   map[int32]bool
-	charSpritePreload  map[[2]uint16]bool
+	charlist      []SelectChar
+	stagelist     []SelectStage
+	selected      [2][][2]int
+	selectedStageNo  int
+	charAnimPreload  map[int32]bool
+	stageAnimPreload  map[int32]bool
+	charSpritePreload map[[2]uint16]bool
 	stageSpritePreload map[[2]uint16]bool
-	cdefOverwrite      map[int]string
-	palOverwrite       map[int]int
-	sdefOverwrite      string
-	music              Music
-	gameParams         *GameParams
+	cdefOverwrite   map[int]string
+	palOverwrite    map[int]int
+	sdefOverwrite   string
+	music       Music
+	gameParams     *GameParams
 }
 
 func newSelect() *Select {
 	return &Select{
-		selectedStageNo:  -1,
-		charAnimPreload:  make(map[int32]bool),
+		selectedStageNo: -1,
+		charAnimPreload: make(map[int32]bool),
 		stageAnimPreload: make(map[int32]bool),
 		charSpritePreload: map[[2]uint16]bool{[...]uint16{9000, 0}: true,
 			[...]uint16{9000, 1}: true},
 		stageSpritePreload: make(map[[2]uint16]bool),
-		palOverwrite:       make(map[int]int),
-		cdefOverwrite:      make(map[int]string),
-		music:              make(Music),
-		gameParams:         newGameParams(),
+		palOverwrite:    make(map[int]int),
+		cdefOverwrite:   make(map[int]string),
+		music:       make(Music),
+		gameParams:     newGameParams(),
 	}
 }
 
@@ -4930,9 +4929,9 @@ const (
 )
 
 type Loader struct {
-	state    LoaderState
+	state  LoaderState
 	loadExit chan LoaderState
-	err      error
+	err   error
 }
 
 func newLoader() *Loader {
@@ -5481,21 +5480,21 @@ func (l *Loader) runTread() bool {
 }
 
 type EnvShake struct {
-	time  int32
-	freq  float32
-	ampl  float32
+	time int32
+	freq float32
+	ampl float32
 	phase float32
-	mul   float32
-	dir   float32 // rad, for ampl=-4:  0: down first, 90: left first, 180: up first, 270: right first
+	mul  float32
+	dir  float32 // rad, for ampl=-4: 0: down first, 90: left first, 180: up first, 270: right first
 }
 
 func (es *EnvShake) clear() {
 	*es = EnvShake{
-		freq:  float32(math.Pi / 3),
-		ampl:  -4.0,
+		freq: float32(math.Pi / 3),
+		ampl: -4.0,
 		phase: float32(math.NaN()),
-		mul:   1.0,
-		dir:   0.0}
+		mul:  1.0,
+		dir:  0.0}
 }
 
 func (es *EnvShake) setDefaultPhase() {
@@ -5531,16 +5530,16 @@ func (es *EnvShake) getOffset() [2]float32 {
 }
 
 type ZoomEffect struct {
-	active      bool
-	time        int32
-	lag         float32
-	endLag      float32
-	scale       float32
-	curScale    float32
-	pos         [2]float32 // Defined parameters
-	curPos      [2]float32 // Current values with lag
+	active   bool
+	time    int32
+	lag     float32
+	endLag   float32
+	scale    float32
+	curScale  float32
+	pos     [2]float32 // Defined parameters
+	curPos   [2]float32 // Current values with lag
 	cameraBound bool
-	stageBound  bool
+	stageBound bool
 }
 
 func (z *ZoomEffect) reset() {
@@ -5652,8 +5651,8 @@ func (z *ZoomEffect) apply(x, y, scl float32) (dx, dy, dscl float32) {
 }
 
 type CharVarBackup struct {
-	cnsvar   map[int32]int32
-	cnsfvar  map[int32]float32
+	cnsvar  map[int32]int32
+	cnsfvar map[int32]float32
 	mapArray map[string]float32
 }
 
@@ -5664,8 +5663,8 @@ func (s *System) saveCharVars(pn int) {
 	c := s.chars[pn][0]
 
 	bk := CharVarBackup{
-		cnsvar:   make(map[int32]int32),
-		cnsfvar:  make(map[int32]float32),
+		cnsvar:  make(map[int32]int32),
+		cnsfvar: make(map[int32]float32),
 		mapArray: make(map[string]float32),
 	}
 

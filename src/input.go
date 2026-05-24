@@ -1,5 +1,3 @@
-//go:build !js
-
 package main
 
 import (
@@ -7,7 +5,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/veandco/go-sdl2/sdl"
 )
 
 var ModAlt ModifierKey
@@ -95,18 +92,18 @@ func NewShortcutKey(key Key, ctrl, alt, shift bool) *ShortcutKey {
 
 func (sk ShortcutKey) Test(k Key, m ModifierKey) bool {
 	trgtMods := sk.Mod & ModCtrlAltShift
-	var expandCurr sdl.Keymod
-	if (m & sdl.KMOD_GUI) != 0 {
-		expandCurr |= sdl.KMOD_GUI
+	var expandCurr sdlKeymod
+	if (m & sdlKMOD_GUI) != 0 {
+		expandCurr |= sdlKMOD_GUI
 	}
-	if (m & sdl.KMOD_CTRL) != 0 {
-		expandCurr |= sdl.KMOD_CTRL
+	if (m & sdlKMOD_CTRL) != 0 {
+		expandCurr |= sdlKMOD_CTRL
 	}
-	if (m & sdl.KMOD_ALT) != 0 {
-		expandCurr |= sdl.KMOD_ALT
+	if (m & sdlKMOD_ALT) != 0 {
+		expandCurr |= sdlKMOD_ALT
 	}
-	if (m & sdl.KMOD_SHIFT) != 0 {
-		expandCurr |= sdl.KMOD_SHIFT
+	if (m & sdlKMOD_SHIFT) != 0 {
+		expandCurr |= sdlKMOD_SHIFT
 	}
 
 	return k == sk.Key && trgtMods == expandCurr
