@@ -349,6 +349,27 @@ func init() {
 					}()
 					return js.ValueOf(map[string]interface{}{"ok": true, "running": true})
 				}))
+				bridge.Set("getProgram", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					rwg, _ := gfx.(*Renderer_WebGL)
+					if rwg != nil && rwg.spriteProgram.Truthy() {
+						return rwg.spriteProgram
+					}
+					return js.Null()
+				}))
+				bridge.Set("getVAO", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					rwg, _ := gfx.(*Renderer_WebGL)
+					if rwg != nil && rwg.vao.Truthy() {
+						return rwg.vao
+					}
+					return js.Null()
+				}))
+				bridge.Set("getVBO", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					rwg, _ := gfx.(*Renderer_WebGL)
+					if rwg != nil && rwg.vertexBuffer.Truthy() {
+						return rwg.vertexBuffer
+					}
+					return js.Null()
+				}))
 				bridge.Set("engineStatus", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 					rwg, _ := gfx.(*Renderer_WebGL)
 					shaderReady := false
@@ -361,6 +382,10 @@ func init() {
 					for i, s := range vertexCallLog {
 						vlog[i] = s
 					}
+					rlog := make([]interface{}, len(bufferReadback))
+					for i, s := range bufferReadback {
+						rlog[i] = s
+					}
 					return js.ValueOf(map[string]interface{}{
 						"started":          engineStarted,
 						"err":              engineLastError,
@@ -370,10 +395,12 @@ func init() {
 						"renderQuadSkip":   renderQuadSkipped,
 						"shaderReady":      shaderReady,
 						"vaoReady":         vaoReady,
-						"vertexCallCount":  vertexCallCount,
-						"vertexCallLog":    vlog,
-						"firstProjection":  firstProjection,
-						"firstModelview":   firstModelview,
+						"vertexCallCount":     vertexCallCount,
+						"vertexCallLog":       vlog,
+						"setVertexDataTotal":  setVertexDataTotal,
+						"firstProjection":     firstProjection,
+						"firstModelview":      firstModelview,
+						"bufferReadback":      rlog,
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {

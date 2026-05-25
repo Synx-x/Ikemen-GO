@@ -306,12 +306,12 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
-	// DIAGNOSTIC stop-state: magenta-only fragment shader, engine vert shader
-	// untouched. Confirms draw pipeline reaches canvas in top-left 558x299 box.
-	// Root cause of full-screen-fill failure unresolved as of 2026-05-24 — see
-	// docs/retrospective.md entry for findings + next-step bisection plan.
-	cleanedFrag = "in vec2 texcoord;\nout vec4 FragColor;\nvoid main(void) { FragColor = vec4(1.0, 0.0, 1.0, 1.0); }"
-	_ = cleanedVert // engine vert preserved
+	// Engine's real shaders preserved. Per-quad geometry verified via
+	// getBufferSubData; magenta diagnostic proved draws land in expected
+	// canvas regions. Issue is downstream: palette/texture lookup in the
+	// embedded fragment shader yields invisible output.
+	_ = cleanedFrag
+	_ = cleanedVert
 
 	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
 	vertShaderSrc := wgl2Prefix + cleanedVert
@@ -471,6 +471,12 @@ func (r *Renderer_WebGL) compileShaders() {
 
 	r.shaderReady = true
 	logConsole("compileShaders: VAO, buffers, and safe defaults ready")
+	// Stash refs on window for live diagnostic queries from JS.
+	js.Global().Set("__ikemen_program", r.spriteProgram)
+	js.Global().Set("__ikemen_vao", r.vao)
+	js.Global().Set("__ikemen_vbo", r.vertexBuffer)
+	logConsoleAlways(fmt.Sprintf("diag: globals set — progTruthy=%v vaoTruthy=%v vboTruthy=%v",
+		r.spriteProgram.Truthy(), r.vao.Truthy(), r.vertexBuffer.Truthy()))
 }
 
 func (r *Renderer_WebGL) Close() {
@@ -927,6 +933,7 @@ func (r *Renderer_WebGL) SetShadowFrameCubeTexture(i uint32) {
 // engine actually pushes per-quad geometry rather than reusing one rect.
 var vertexCallLog []string
 var vertexCallCount int
+var setVertexDataTotal int
 var lastProjection [16]float32
 var lastModelview [16]float32
 
@@ -934,6 +941,7 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 	if !webglContext.Truthy() || !r.vertexBuffer.Truthy() {
 		return
 	}
+	setVertexDataTotal++
 	if vertexCallCount < 12 {
 		s := ""
 		for i, v := range values {
@@ -954,7 +962,26 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 	}
 	webglContext.Call("bindBuffer", ARRAY_BUFFER, r.vertexBuffer)
 	webglContext.Call("bufferData", ARRAY_BUFFER, fresh, DYNAMIC_DRAW)
+
+	// Diagnostic: read GPU buffer back to confirm bufferData stuck.
+	// Captured into bufferReadback for first 3 calls only.
+	if bufferReadbackCount < 3 {
+		readback := js.Global().Get("Float32Array").New(len(values))
+		webglContext.Call("getBufferSubData", ARRAY_BUFFER, 0, readback)
+		s := ""
+		for i := 0; i < len(values); i++ {
+			if i > 0 {
+				s += ","
+			}
+			s += fmt.Sprintf("%.1f", readback.Index(i).Float())
+		}
+		bufferReadback = append(bufferReadback, s)
+		bufferReadbackCount++
+	}
 }
+
+var bufferReadback []string
+var bufferReadbackCount int
 
 func (r *Renderer_WebGL) SetModelVertexData(bufferIndex uint32, values []byte) {
 	// No-op stub
