@@ -152,6 +152,15 @@ func (t *Texture_WebGL) SetData(data []byte) {
 	if len(data) > 0 {
 		arr := js.Global().Get("Uint8Array").New(len(data))
 		js.CopyBytesToJS(arr, data)
+		// For palette uploads (256x1), force per-index SetIndex to bypass
+		// any CopyBytesToJS quirk that may leave Uint8Array view zeroed
+		// even after a successful Go-side copy. Slow (1024 ops) but only
+		// fires for palette texture uploads.
+		if t.width == 256 && t.height == 1 {
+			for i := 0; i < len(data); i++ {
+				arr.SetIndex(i, int(data[i]))
+			}
+		}
 		webglContext.Call("texImage2D",
 			TEXTURE_2D, 0, internal,
 			int(t.width), int(t.height), 0,
@@ -649,15 +658,20 @@ func (r *Renderer_WebGL) ReleaseModelPipeline() {
 func (r *Renderer_WebGL) newTexture(width, height, depth int32, filter bool) Texture {
 	var handle js.Value
 	if webglContext.Truthy() {
+		webglContext.Call("activeTexture", TEXTURE0)
 		handle = webglContext.Call("createTexture")
 		webglContext.Call("bindTexture", TEXTURE_2D, handle)
 
-		// Initialize with empty data
+		// Match initial allocation format to the texture's intended depth.
+		// Previously this always used unsized RGBA which conflicted with
+		// SetData re-spec'ing as RGBA8/R8 — WebGL2 disallows changing the
+		// internalformat between texImage2D calls on the same texture.
+		initInternal, initFmt, initType := texFormatForDepth(depth)
 		webglContext.Call(
 			"texImage2D",
-			TEXTURE_2D, 0, RGBA,
+			TEXTURE_2D, 0, initInternal,
 			int(width), int(height), 0,
-			RGBA, UNSIGNED_BYTE, js.Null(),
+			initFmt, initType, js.Null(),
 		)
 
 		// Set filters
