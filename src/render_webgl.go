@@ -312,10 +312,8 @@ func (r *Renderer_WebGL) compileShaders() {
 	// should appear as grayscale text. If they appear, palette upload
 	// is the broken step. If still invisible, tex sampling for menu
 	// glyphs is broken too.
-	cleanedFrag = strings.Replace(cleanedFrag,
-		"c = COMPAT_TEXTURE(pal, vec2(c.r*0.9966, 0.5));",
-		"c = vec4(c.r * 8.0, c.r * 8.0, c.r * 8.0, c.r > 0.0 ? 1.0 : 0.0);",
-		1)
+	// Revert diagnostic — use engine's real palette path.
+	_ = cleanedFrag
 	_ = cleanedVert
 
 	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
