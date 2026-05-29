@@ -900,11 +900,8 @@ func (r *Renderer_WebGL) SetUniformMatrix(name string, value []float32) {
 	}
 }
 
-var setTextureTexCount, setTexturePalCount, setTextureNilCount int
-
 func (r *Renderer_WebGL) SetTexture(name string, tex Texture) {
 	if tex == nil {
-		setTextureNilCount++
 		return
 	}
 	t := tex.(*Texture_WebGL)
@@ -916,11 +913,9 @@ func (r *Renderer_WebGL) SetTexture(name string, tex Texture) {
 	if name == "palTex" || name == "pal" {
 		unit = 1
 		r.currentPalTex = t
-		setTexturePalCount++
 	} else {
 		unit = 0
 		r.currentTexture = t
-		setTextureTexCount++
 	}
 
 	// Bind texture to the correct unit and set sampler uniform to point to it
