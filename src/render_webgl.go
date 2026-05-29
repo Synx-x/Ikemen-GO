@@ -309,13 +309,7 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
-	// DIAGNOSTIC: replace palette lookup with grayscale from index.
-	// Output (idx*8, idx*8, idx*8, 1) so non-zero palette indices show
-	// as gray pixels regardless of palette texture contents. Glyphs
-	// should appear as grayscale text. If they appear, palette upload
-	// is the broken step. If still invisible, tex sampling for menu
-	// glyphs is broken too.
-	// Revert diagnostic — use engine's real palette path.
+	// Engine's real shaders — clean baseline.
 	_ = cleanedFrag
 	_ = cleanedVert
 
@@ -966,6 +960,19 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 		return
 	}
 	setVertexDataTotal++
+	// Capture glyph quad vertex payloads verbatim (first 8). inGlyphDraw
+	// set by font.go drawChar. Format: x0,y0,u0,v0, x1,y1,u1,v1, ...
+	if inGlyphDraw && len(glyphVertLog) < 8 {
+		s := ""
+		for i, v := range values {
+			if i > 0 {
+				s += ","
+			}
+			s += fmt.Sprintf("%.1f", v)
+		}
+		s += " P=" + fmt.Sprintf("%v", lastProjection) + " M=" + fmt.Sprintf("%v", lastModelview)
+		glyphVertLog = append(glyphVertLog, s)
+	}
 	// Sample bbox of each quad (every 3rd call) once engine past first
 	// 100 calls (skip startup logo/storyboard). Cap log at 200 entries.
 	if setVertexDataTotal > 100 && setVertexDataTotal%3 == 0 && vertexCallCount < 200 {
@@ -1038,11 +1045,36 @@ func (r *Renderer_WebGL) RenderQuad() {
 	if renderQuadCount > 150 && renderQuadCount%5 == 0 && len(drawTimeLog) < 60 {
 		drawTimeLog = append(drawTimeLog, fmt.Sprintf("#%d P0=%.4f P5=%.4f Px=%.2f Py=%.2f M13=%.1f", renderQuadCount, lastProjection[0], lastProjection[5], lastProjection[12], lastProjection[13], lastModelview[13]))
 	}
+	// Glyph instrumentation: count glyph RenderQuads + read back what the
+	// GPU buffer actually holds at glyph draw time (first 8 glyph draws).
+	if inGlyphDraw {
+		glyphRenderQuadCount++
+		if len(glyphQuadReadback) < 4 {
+			// Read ACTUAL GPU uniform values at glyph draw (ground truth,
+			// not the Go-side mirror). useProgram first so getUniform reads
+			// the right program.
+			// Read VAO attrib-0 (position) state: which buffer it reads,
+			// enabled, size, stride. Compare to r.vertexBuffer.
+			webglContext.Call("bindVertexArray", r.vao)
+			attrBuf := webglContext.Call("getVertexAttrib", 0, 0x889F) // BUFFER_BINDING
+			en0 := webglContext.Call("getVertexAttrib", 0, 0x8622).Bool()  // ARRAY_ENABLED
+			sz0 := webglContext.Call("getVertexAttrib", 0, 0x8623).Int()   // ARRAY_SIZE
+			st0 := webglContext.Call("getVertexAttrib", 0, 0x8624).Int()   // ARRAY_STRIDE
+			en1 := webglContext.Call("getVertexAttrib", 1, 0x8622).Bool()
+			sameBuf := attrBuf.Truthy() && attrBuf.Equal(r.vertexBuffer)
+			glyphQuadReadback = append(glyphQuadReadback, fmt.Sprintf(
+				"attr0bufIsVertexBuffer=%v attr0enabled=%v size=%d stride=%d attr1enabled=%v vaoTruthy=%v",
+				sameBuf, en0, sz0, st0, en1, r.vao.Truthy()))
+		}
+	}
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
 	webglContext.Call("drawArrays", 5, 0, 4)
 	renderQuadCount++
 }
+
+var glyphRenderQuadCount int
+var glyphQuadReadback []string
 
 func (r *Renderer_WebGL) RenderElements(mode PrimitiveMode, count, offset int) {
 	logConsole("RenderElements called")

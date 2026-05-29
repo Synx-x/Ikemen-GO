@@ -406,6 +406,13 @@ func init() {
 						"firstModelview":     firstModelview,
 						"bufferReadback":     rlog,
 						"drawTimeLog":        dlog,
+						"glyphDrawAttempts":  glyphDrawAttempts,
+						"glyphSprNil":        glyphSprNil,
+						"glyphTexNil":        glyphTexNil,
+						"glyphRendered":      glyphRendered,
+						"glyphVertLog":       func() []interface{} { o := make([]interface{}, len(glyphVertLog)); for i, s := range glyphVertLog { o[i] = s }; return o }(),
+						"glyphRenderQuad":     glyphRenderQuadCount,
+						"glyphQuadReadback":   func() []interface{} { o := make([]interface{}, len(glyphQuadReadback)); for i, s := range glyphQuadReadback { o[i] = s }; return o }(),
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {

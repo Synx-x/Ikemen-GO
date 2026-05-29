@@ -528,6 +528,17 @@ func (f *Fnt) getCharSpr(c rune, bank, bt int32) *Sprite {
 	return &fci.img[0]
 }
 
+// Diagnostic counters for wasm font-glyph render bug (exposed via engineStatus).
+var glyphDrawAttempts, glyphSprNil, glyphTexNil, glyphRendered int
+
+// inGlyphDraw is true while a font glyph quad is being submitted, so the
+// renderer can capture its vertex data specifically. Plain bool: harmless
+// on native.
+var inGlyphDraw bool
+
+// glyphVertLog captures the first few glyph quad vertex payloads.
+var glyphVertLog []string
+
 func (f *Fnt) drawChar(
 	x, y,
 	xscl, yscl float32,
@@ -539,10 +550,19 @@ func (f *Fnt) drawChar(
 		return float32(f.Size[0]) * xscl
 	}
 
+	glyphDrawAttempts++
 	spr := f.getCharSpr(c, bank, bt)
-	if spr == nil || spr.Tex == nil {
+	if spr == nil {
+		glyphSprNil++
 		return 0
 	}
+	if spr.Tex == nil {
+		glyphTexNil++
+		return 0
+	}
+	glyphRendered++
+	inGlyphDraw = true
+	defer func() { inGlyphDraw = false }()
 
 	// Only paletted sprites (<=8bpp) use palette mapping.
 	if spr.coldepth <= 8 {
