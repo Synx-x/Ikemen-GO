@@ -35,7 +35,30 @@ const (
 	KeyF12        Key = 0x40000045 // SDLK_F12
 	KeyPause      Key = 0x40000048 // SDLK_PAUSE
 	KeyScrollLock Key = 0x40000047 // SDLK_SCROLLLOCK
+	KeyUp         Key = 0x40000052 // SDLK_UP
+	KeyDown       Key = 0x40000051 // SDLK_DOWN
+	KeyLeft       Key = 0x40000050 // SDLK_LEFT
+	KeyRight      Key = 0x4000004F // SDLK_RIGHT
+	KeySpace      Key = 0x20       // SDLK_SPACE
+	KeyTab        Key = 0x09       // SDLK_TAB
+	KeyBackspace  Key = 0x08       // SDLK_BACKSPACE
 )
+
+// domCodeToKey maps DOM KeyboardEvent.code → engine Key (SDL keycode).
+var domCodeToKey = map[string]Key{
+	"Enter": KeyEnter, "Escape": KeyEscape, "Space": KeySpace, "Tab": KeyTab,
+	"Backspace": KeyBackspace,
+	"ArrowUp":   KeyUp, "ArrowDown": KeyDown, "ArrowLeft": KeyLeft, "ArrowRight": KeyRight,
+	"F1": 0x4000003A, "F2": 0x4000003B, "F3": 0x4000003C, "F4": 0x4000003D,
+	"F5": KeyF5, "F12": KeyF12,
+	"KeyA": 0x61, "KeyB": 0x62, "KeyC": 0x63, "KeyD": 0x64, "KeyE": 0x65, "KeyF": 0x66,
+	"KeyG": 0x67, "KeyH": 0x68, "KeyI": 0x69, "KeyJ": 0x6a, "KeyK": 0x6b, "KeyL": 0x6c,
+	"KeyM": 0x6d, "KeyN": 0x6e, "KeyO": 0x6f, "KeyP": 0x70, "KeyQ": 0x71, "KeyR": 0x72,
+	"KeyS": 0x73, "KeyT": 0x74, "KeyU": 0x75, "KeyV": 0x76, "KeyW": 0x77, "KeyX": 0x78,
+	"KeyY": 0x79, "KeyZ": 0x7a,
+	"Digit0": 0x30, "Digit1": 0x31, "Digit2": 0x32, "Digit3": 0x33, "Digit4": 0x34,
+	"Digit5": 0x35, "Digit6": 0x36, "Digit7": 0x37, "Digit8": 0x38, "Digit9": 0x39,
+}
 
 // ControllerState mirrors the native struct field types so input.go's
 // indexed reads type-check unchanged. Axes is int8 to match the native
@@ -168,7 +191,21 @@ func (w *Window) GetScaledViewportSize() (int32, int32, int32, int32)           
 func (w *Window) GetClipboardString() string                                     { return "" }
 func (w *Window) toggleFullscreen()                                              {}
 func (w *Window) UpdateDebugFPS()                                                {}
-func (w *Window) pollEvents()                                                    {}
+func (w *Window) pollEvents() {
+	// Drain DOM keyboard events from injectKey queue and dispatch through
+	// engine's OnKeyPressed / OnKeyReleased so sys.keyState updates correctly.
+	for _, evt := range DrainDomKeys() {
+		k, ok := domCodeToKey[evt.Code]
+		if !ok {
+			continue
+		}
+		if evt.Down {
+			OnKeyPressed(k, ModifierKey(evt.Mods))
+		} else {
+			OnKeyReleased(k, ModifierKey(evt.Mods))
+		}
+	}
+}
 func (w *Window) GLCreateContext() (interface{}, error)                          { return nil, nil }
 func (w *Window) GLMakeCurrent(ctx interface{})                                  {}
 func (w *Window) Close()                                                         {}
