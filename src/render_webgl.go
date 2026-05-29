@@ -152,20 +152,19 @@ func (t *Texture_WebGL) SetData(data []byte) {
 	if len(data) > 0 {
 		arr := js.Global().Get("Uint8Array").New(len(data))
 		js.CopyBytesToJS(arr, data)
-		// For palette uploads (256x1), force per-index SetIndex to bypass
-		// any CopyBytesToJS quirk that may leave Uint8Array view zeroed
-		// even after a successful Go-side copy. Slow (1024 ops) but only
-		// fires for palette texture uploads.
 		if t.width == 256 && t.height == 1 {
 			for i := 0; i < len(data); i++ {
 				arr.SetIndex(i, int(data[i]))
 			}
 		}
+		// Clear any pre-existing GL error before texImage2D
+		webglContext.Call("getError")
 		webglContext.Call("texImage2D",
 			TEXTURE_2D, 0, internal,
 			int(t.width), int(t.height), 0,
 			fmt, dtype, arr,
 		)
+		_ = arr // gl.error logging stripped after confirming upload succeeds
 	} else {
 		webglContext.Call("texImage2D",
 			TEXTURE_2D, 0, internal,
