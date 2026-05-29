@@ -200,8 +200,55 @@ func (t *Texture_WebGL) SetDataG(data []byte, mag, min, ws, wt TextureSamplingPa
 	t.SetData(data)
 }
 
+// SetPixelData uploads float-valued pixel data. Used by HDR/IBL model
+// textures (model.go:385). Sprite palettes go through SetData (image.go:501)
+// not SetPixelData. Keep this method robust against unexpected sizes since
+// engine boots before any model data loads.
 func (t *Texture_WebGL) SetPixelData(data []float32) {
-	logConsole("Texture_WebGL.SetPixelData called")
+	if !t.handle.Truthy() || len(data) == 0 {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			logConsoleAlways(fmt.Sprintf("SetPixelData panic recovered: %v", r))
+		}
+	}()
+	// Match render_gl33.go SetPixelData: format = RED (1 ch), internal = RGBA,
+	// type = FLOAT. Engine packs palette as 1 float per pixel where the index
+	// is encoded in the R channel; fragment shader samples pal.r and palette
+	// LOOKUP is one-dimensional. Data length should equal pixel count.
+	logConsoleAlways(fmt.Sprintf("SetPixelData: %dx%d depth=%d len=%d", t.width, t.height, t.depth, len(data)))
+	internal := glRGBA32F
+	format := glRGBA
+	dtype := glFLOAT
+	pixCount := int(t.width * t.height)
+	if len(data) == pixCount {
+		// 1 float per pixel: format=RED, data goes into R, GBA default 0,0,1.
+		format = glRED
+	} else if len(data) == pixCount*4 {
+		// 4 floats per pixel: full RGBA.
+		format = glRGBA
+	}
+
+	// Pack []float32 into JS Float32Array.
+	arr := js.Global().Get("Float32Array").New(len(data))
+	for i, v := range data {
+		arr.SetIndex(i, v)
+	}
+
+	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
+	webglContext.Call("pixelStorei", glUNPACK_ALIGNMENT, 1)
+	webglContext.Call("pixelStorei", glUNPACK_ROW_LENGTH, 0)
+	webglContext.Call("texImage2D",
+		TEXTURE_2D, 0, internal,
+		int(t.width), int(t.height), 0,
+		format, dtype, arr,
+	)
+	// NEAREST filter for palette so indices don't interpolate.
+	webglContext.Call("texParameteri", TEXTURE_2D, TEXTURE_MIN_FILTER, NEAREST)
+	webglContext.Call("texParameteri", TEXTURE_2D, TEXTURE_MAG_FILTER, NEAREST)
+	webglContext.Call("texParameteri", TEXTURE_2D, TEXTURE_WRAP_S, CLAMP_TO_EDGE)
+	webglContext.Call("texParameteri", TEXTURE_2D, TEXTURE_WRAP_T, CLAMP_TO_EDGE)
 }
 
 func (t *Texture_WebGL) IsValid() bool {
