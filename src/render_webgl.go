@@ -138,6 +138,9 @@ func (t *Texture_WebGL) SetData(data []byte) {
 
 	internal, fmt, dtype := texFormatForDepth(t.depth)
 
+	// Pin to unit 0 so uploads don't accidentally land in another unit's
+	// bound slot (matters when SetTexture left TEXTURE1 active earlier).
+	webglContext.Call("activeTexture", TEXTURE0)
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
 	webglContext.Call("pixelStorei", glUNPACK_ALIGNMENT, 1)
 	webglContext.Call("pixelStorei", glUNPACK_ROW_LENGTH, 0)
@@ -353,8 +356,7 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
-	// Engine's real shaders. Blend handling fixed (EnableBlending now sets
-	// blendEquation and blendFunc per native pattern).
+	// Engine's real frag shader.
 	_ = cleanedFrag
 	_ = cleanedVert
 
@@ -694,6 +696,9 @@ func (r *Renderer_WebGL) ReleaseModelPipeline() {
 func (r *Renderer_WebGL) newTexture(width, height, depth int32, filter bool) Texture {
 	var handle js.Value
 	if webglContext.Truthy() {
+		// Bind to unit 0 explicitly so newTexture's setup state can't leak
+		// onto whatever unit was active from a prior SetTexture call.
+		webglContext.Call("activeTexture", TEXTURE0)
 		handle = webglContext.Call("createTexture")
 		webglContext.Call("bindTexture", TEXTURE_2D, handle)
 
