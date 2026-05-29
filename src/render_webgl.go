@@ -306,9 +306,16 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
-	// Engine's real shaders. Blend handling fixed (EnableBlending now sets
-	// blendEquation and blendFunc per native pattern).
-	_ = cleanedFrag
+	// DIAGNOSTIC: replace palette lookup with grayscale from index.
+	// Output (idx*8, idx*8, idx*8, 1) so non-zero palette indices show
+	// as gray pixels regardless of palette texture contents. Glyphs
+	// should appear as grayscale text. If they appear, palette upload
+	// is the broken step. If still invisible, tex sampling for menu
+	// glyphs is broken too.
+	cleanedFrag = strings.Replace(cleanedFrag,
+		"c = COMPAT_TEXTURE(pal, vec2(c.r*0.9966, 0.5));",
+		"c = vec4(c.r * 8.0, c.r * 8.0, c.r * 8.0, c.r > 0.0 ? 1.0 : 0.0);",
+		1)
 	_ = cleanedVert
 
 	// Compile vertex shader (embedded from src/shaders/sprite.vert.glsl)
