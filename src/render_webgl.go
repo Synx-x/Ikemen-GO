@@ -138,6 +138,9 @@ func (t *Texture_WebGL) SetData(data []byte) {
 
 	internal, fmt, dtype := texFormatForDepth(t.depth)
 
+	// Pin to unit 0 so prior SetTexture("pal") active-unit state doesn't
+	// route this upload into the wrong texture object.
+	webglContext.Call("activeTexture", TEXTURE0)
 	webglContext.Call("bindTexture", TEXTURE_2D, t.handle)
 	webglContext.Call("pixelStorei", glUNPACK_ALIGNMENT, 1)
 	webglContext.Call("pixelStorei", glUNPACK_ROW_LENGTH, 0)
@@ -147,16 +150,8 @@ func (t *Texture_WebGL) SetData(data []byte) {
 	webglContext.Call("pixelStorei", glUNPACK_FLIP_Y_WEBGL, 0)
 
 	if len(data) > 0 {
-		var arr js.Value
-		if dtype == glFLOAT {
-			// Floats arrive as []byte (4 bytes per float). View as
-			// Float32Array of len(data)/4 elements.
-			arr = js.Global().Get("Uint8Array").New(len(data))
-			js.CopyBytesToJS(arr, data)
-		} else {
-			arr = js.Global().Get("Uint8Array").New(len(data))
-			js.CopyBytesToJS(arr, data)
-		}
+		arr := js.Global().Get("Uint8Array").New(len(data))
+		js.CopyBytesToJS(arr, data)
 		webglContext.Call("texImage2D",
 			TEXTURE_2D, 0, internal,
 			int(t.width), int(t.height), 0,
