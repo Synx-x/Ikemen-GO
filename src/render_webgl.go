@@ -306,10 +306,8 @@ func (r *Renderer_WebGL) compileShaders() {
 	cleanedVert := stripVulkanBranch(vertShader)
 	cleanedFrag := stripVulkanBranch(fragShader)
 
-	// Engine's real shaders preserved. Per-quad geometry verified via
-	// getBufferSubData; magenta diagnostic proved draws land in expected
-	// canvas regions. Issue is downstream: palette/texture lookup in the
-	// embedded fragment shader yields invisible output.
+	// Engine's real shaders. Blend handling fixed (EnableBlending now sets
+	// blendEquation and blendFunc per native pattern).
 	_ = cleanedFrag
 	_ = cleanedVert
 
@@ -575,10 +573,21 @@ func (r *Renderer_WebGL) EnableBlending(eq BlendEquation, src, dst BlendFunc) {
 		webglContext.Call("enable", BLEND)
 		r.blendEnabled = true
 	}
-	// Map blend funcs
+	webglContext.Call("blendEquation", r.mapBlendEquation(eq))
 	srcGLFunc := r.mapBlendFunc(src)
 	dstGLFunc := r.mapBlendFunc(dst)
 	webglContext.Call("blendFunc", srcGLFunc, dstGLFunc)
+}
+
+func (r *Renderer_WebGL) mapBlendEquation(eq BlendEquation) int {
+	switch eq {
+	case BlendAdd:
+		return 0x8006 // FUNC_ADD
+	case BlendReverseSubtract:
+		return 0x800B // FUNC_REVERSE_SUBTRACT
+	default:
+		return 0x8006
+	}
 }
 
 func (r *Renderer_WebGL) DisableBlending() {
@@ -942,17 +951,26 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 		return
 	}
 	setVertexDataTotal++
-	if vertexCallCount < 12 {
-		s := ""
-		for i, v := range values {
-			if i > 0 {
-				s += ","
+	// Sample bbox of each quad (every 3rd call) once engine past first
+	// 100 calls (skip startup logo/storyboard). Cap log at 200 entries.
+	if setVertexDataTotal > 100 && setVertexDataTotal%3 == 0 && vertexCallCount < 200 {
+		minX, maxX := values[0], values[0]
+		minY, maxY := values[1], values[1]
+		for i := 0; i < len(values); i += 4 {
+			if values[i] < minX {
+				minX = values[i]
 			}
-			s += fmt.Sprintf("%.1f", v)
+			if values[i] > maxX {
+				maxX = values[i]
+			}
+			if values[i+1] < minY {
+				minY = values[i+1]
+			}
+			if values[i+1] > maxY {
+				maxY = values[i+1]
+			}
 		}
-		s += " | P=" + fmt.Sprintf("%v", lastProjection)
-		s += " | M=" + fmt.Sprintf("%v", lastModelview)
-		vertexCallLog = append(vertexCallLog, s)
+		vertexCallLog = append(vertexCallLog, fmt.Sprintf("#%d xy(%.0f..%.0f,%.0f..%.0f)", setVertexDataTotal, minX, maxX, minY, maxY))
 		vertexCallCount++
 	}
 	// Use a FRESH Float32Array per call (avoid persistent-buffer aliasing).
@@ -995,10 +1013,15 @@ func (r *Renderer_WebGL) SetModelIndexData(bufferIndex uint32, values ...uint32)
 var renderQuadCount int
 var renderQuadSkipped int
 
+var drawTimeLog []string
+
 func (r *Renderer_WebGL) RenderQuad() {
 	if !webglContext.Truthy() || !r.spriteProgram.Truthy() || !r.vao.Truthy() {
 		renderQuadSkipped++
 		return
+	}
+	if renderQuadCount > 150 && renderQuadCount%5 == 0 && len(drawTimeLog) < 60 {
+		drawTimeLog = append(drawTimeLog, fmt.Sprintf("#%d P0=%.4f P5=%.4f Px=%.2f Py=%.2f M13=%.1f", renderQuadCount, lastProjection[0], lastProjection[5], lastProjection[12], lastProjection[13], lastModelview[13]))
 	}
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)

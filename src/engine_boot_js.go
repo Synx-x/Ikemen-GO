@@ -386,21 +386,26 @@ func init() {
 					for i, s := range bufferReadback {
 						rlog[i] = s
 					}
+					dlog := make([]interface{}, len(drawTimeLog))
+					for i, s := range drawTimeLog {
+						dlog[i] = s
+					}
 					return js.ValueOf(map[string]interface{}{
-						"started":          engineStarted,
-						"err":              engineLastError,
-						"frameCounter":     int(sys.frameCounter),
-						"storyboardActive": sys.storyboard.active,
-						"renderQuad":       renderQuadCount,
-						"renderQuadSkip":   renderQuadSkipped,
-						"shaderReady":      shaderReady,
-						"vaoReady":         vaoReady,
-						"vertexCallCount":     vertexCallCount,
-						"vertexCallLog":       vlog,
-						"setVertexDataTotal":  setVertexDataTotal,
-						"firstProjection":     firstProjection,
-						"firstModelview":      firstModelview,
-						"bufferReadback":      rlog,
+						"started":            engineStarted,
+						"err":                engineLastError,
+						"frameCounter":       int(sys.frameCounter),
+						"storyboardActive":   sys.storyboard.active,
+						"renderQuad":         renderQuadCount,
+						"renderQuadSkip":     renderQuadSkipped,
+						"shaderReady":        shaderReady,
+						"vaoReady":           vaoReady,
+						"vertexCallCount":    vertexCallCount,
+						"vertexCallLog":      vlog,
+						"setVertexDataTotal": setVertexDataTotal,
+						"firstProjection":    firstProjection,
+						"firstModelview":     firstModelview,
+						"bufferReadback":     rlog,
+						"drawTimeLog":        dlog,
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
