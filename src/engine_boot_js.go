@@ -406,6 +406,9 @@ func init() {
 						"firstModelview":     firstModelview,
 						"bufferReadback":     rlog,
 						"drawTimeLog":        dlog,
+						"setTextureTex":      setTextureTexCount,
+						"setTexturePal":      setTexturePalCount,
+						"setTextureNil":      setTextureNilCount,
 					})
 				}))
 				bridge.Set("bootEngine", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
