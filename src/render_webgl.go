@@ -539,21 +539,23 @@ func (r *Renderer_WebGL) SetSpritePipeline(shaderName string) {
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
 
-	// Bind both texture units and set sampler uniforms to match
-	// Sampler 0 = sprite texture, Sampler 1 = palette texture
-	webglContext.Call("activeTexture", TEXTURE0)
+	// Set sampler-unit assignments once. activeTexture state doesn't matter
+	// for uniform1i — it just maps the named sampler to a unit. Engine
+	// calls SetTexture afterward which sets activeTexture + binds the
+	// actual texture object to that unit.
 	if r.texLoc.Truthy() {
 		webglContext.Call("uniform1i", r.texLoc, 0)
 	}
-	webglContext.Call("activeTexture", TEXTURE1)
 	if r.palTexLoc.Truthy() {
 		webglContext.Call("uniform1i", r.palTexLoc, 1)
 	}
 
-	// Enable blending for sprites (src=SRC_ALPHA, dst=ONE_MINUS_SRC_ALPHA)
-	webglContext.Call("enable", BLEND)
-	webglContext.Call("blendFunc", SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
-	r.blendEnabled = true
+	// Don't force blendFunc here — engine's EnableBlending sets it per quad
+	// with the correct equation+factors. Just ensure blend is on.
+	if !r.blendEnabled {
+		webglContext.Call("enable", BLEND)
+		r.blendEnabled = true
+	}
 }
 
 func (r *Renderer_WebGL) SetCustomUniforms(params [16]float32) {
