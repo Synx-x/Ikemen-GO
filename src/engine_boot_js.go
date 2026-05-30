@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"syscall/js"
 
@@ -471,6 +472,12 @@ func init() {
 					if len(sys.chars) > 1 { p2n = len(sys.chars[1]) }
 					stageName := ""
 					if sys.stage != nil { stageName = sys.stage.def }
+					// GC/heap stats — the prime suspect for ~1s wasm freezes is a
+					// stop-the-world GC pause (single-threaded on wasm). NumGC +
+					// PauseTotalNs let the front-end correlate a frame-time spike
+					// with a GC cycle. ReadMemStats is cheap relative to a poll.
+					var ms runtime.MemStats
+					runtime.ReadMemStats(&ms)
 					return js.ValueOf(map[string]interface{}{
 						"started":            engineStarted,
 						"err":                engineLastError,
@@ -481,6 +488,11 @@ func init() {
 						"nCmdLists":          len(sys.commandLists),
 						"kcDump":             kcDump,
 						"frameCounter":       int(sys.frameCounter),
+						"gcNum":              int(ms.NumGC),
+						"gcPauseTotalMs":     float64(ms.PauseTotalNs) / 1e6,
+						"gcLastPauseMs":      float64(ms.PauseNs[(ms.NumGC+255)%256]) / 1e6,
+						"heapAllocMB":        float64(ms.HeapAlloc) / 1048576.0,
+						"heapSysMB":          float64(ms.HeapSys) / 1048576.0,
 						"gameMode":           sys.gameMode,
 						"gameTime":           sys.gameTime(),
 						"esc":                sys.esc,
