@@ -1219,6 +1219,9 @@ func (s *System) uiRawInput(btns []string, controllerIdx int) bool {
 				}
 				s.lastInputController = controllerKey
 				s.uiLastInputToken = tok
+				if len(uiTrigLog) < 40 {
+					uiTrigLog = append(uiTrigLog, fmt.Sprintf("f%d ctrl%d tok=%s Db=%d Ub=%d", s.frameCounter, i, tok, ib.Db, ib.Ub))
+				}
 				return true
 			}
 		}
@@ -1865,6 +1868,9 @@ var debugFlushLayers = false
 var flushOpsHist []int
 var debugNoFade = false
 var awaitPixelLog []string
+var uiTrigLog []string
+var luaMenuDrawCalls int
+var dbgTickLog []string
 func (s *System) luaDiscardDrawQueue() {
 	luaDiscardCount++
 	s.luaDrawPreOps = s.luaDrawPreOps[:0]

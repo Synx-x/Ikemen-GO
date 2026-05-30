@@ -2542,6 +2542,18 @@ func systemScriptInit(l *lua.LState) {
 		l.Push(lua.LBool(sys.replayFile != nil))
 		return 1
 	})
+	luaRegister(l, "dbgTick", func(l *lua.LState) int {
+		// DEBUG: reliable Lua->Go log channel (console.log capture is flaky in
+		// headless Playwright). Appends the string arg to dbgTickLog, exposed
+		// via engineStatus.
+		luaMenuDrawCalls++
+		if !nilArg(l, 1) {
+			if len(dbgTickLog) < 60 {
+				dbgTickLog = append(dbgTickLog, strArg(l, 1))
+			}
+		}
+		return 0
+	})
 	luaRegister(l, "esc", func(l *lua.LState) int {
 		/*Get or set the global escape flag.
 		@function esc
@@ -5560,6 +5572,12 @@ func systemScriptInit(l *lua.LState) {
 		/*Advance one frame: process logic, drawing and fades.
 		@function refresh
 		function refresh() end*/
+		// DEBUG: confirm the dbgTickLog channel works + record which Lua menu
+		// loop is the active per-frame driver. refresh() is called once per
+		// frame by whichever loop is running.
+		if sys.frameCounter%20 == 0 && len(dbgTickLog) < 60 {
+			dbgTickLog = append(dbgTickLog, fmt.Sprintf("refresh f%d menuDrawCalls=%d", sys.frameCounter, luaMenuDrawCalls))
+		}
 		sys.tickSound()
 		if !sys.frameSkip {
 			sys.luaFlushDrawQueue()

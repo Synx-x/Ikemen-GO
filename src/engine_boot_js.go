@@ -248,6 +248,26 @@ func bootEngine() error {
 		return cfgErr
 	}
 	sys.cfg = *cfg
+	// On wasm, config saves are no-op'd (no filesystem), so Config.FirstRun
+	// never persists as false. Left true, the title menu enters the first-run
+	// infobox (f_warning), which loops waiting for a dismiss key that never
+	// arrives headless — the menu loop wedges and the menu never appears.
+	// Force it false so the title falls straight through to the live menu.
+	sys.cfg.Config.FirstRun = false
+	// The seeded wasm config.ini has no [Keys_P1] bindings, so every keyConfig
+	// loads with dU/dD/...=0 — GetKeyboardState then reads keyState[Key(0)] and
+	// the menu never sees keyboard input. Seed P1 keyboard defaults that match
+	// the DOM bridge's domCodeToKey mapping (arrows + Enter/Esc + letters) so
+	// the menu is navigable. Buttons use SDLK letter codes (KeyA=0x61, etc).
+	if len(sys.keyConfig) > 0 {
+		sys.keyConfig[0] = KeyConfig{
+			Joy: -1,
+			dU:  int(KeyUp), dD: int(KeyDown), dL: int(KeyLeft), dR: int(KeyRight),
+			bA: 0x7a /*z*/, bB: 0x78 /*x*/, bC: 0x63 /*c*/,
+			bX: 0x61 /*a*/, bY: 0x73 /*s*/, bZ: 0x64 /*d*/,
+			bS: int(KeyEnter), bD: int(KeyEnter), bW: int(KeyBackspace), bM: int(KeyEscape),
+		}
+	}
 	logConsole(fmt.Sprintf("[ikemen-wasm] config loaded: motif=%s", sys.cfg.Config.Motif))
 
 	// Stage 1: Open and verify the Lua system script file
@@ -396,9 +416,18 @@ func init() {
 					for i, s := range drawTimeLog {
 						dlog[i] = s
 					}
+					kcDump := ""
+					for i, kc := range sys.keyConfig {
+						kcDump += fmt.Sprintf("[%d joy=%d dD=%d dU=%d] ", i, kc.Joy, kc.dD, kc.dU)
+					}
 					return js.ValueOf(map[string]interface{}{
 						"started":            engineStarted,
 						"err":                engineLastError,
+						"keyStateDown":       sys.keyState[KeyDown],
+						"keyStateUp":         sys.keyState[KeyUp],
+						"nKeyConfig":         len(sys.keyConfig),
+						"nCmdLists":          len(sys.commandLists),
+						"kcDump":             kcDump,
 						"frameCounter":       int(sys.frameCounter),
 						"storyboardActive":   sys.storyboard.active,
 						"renderQuad":         renderQuadCount,
@@ -421,6 +450,8 @@ func init() {
 						"flushLayerLog":       func() []interface{} { o := make([]interface{}, len(flushLayerLog)); for i, s := range flushLayerLog { o[i] = s }; return o }(),
 						"flushOpsHist":        func() []interface{} { o := make([]interface{}, len(flushOpsHist)); for i, v := range flushOpsHist { o[i] = v }; return o }(),
 						"awaitPixelLog":       func() []interface{} { o := make([]interface{}, len(awaitPixelLog)); for i, s := range awaitPixelLog { o[i] = s }; return o }(),
+						"uiTrigLog":           func() []interface{} { o := make([]interface{}, len(uiTrigLog)); for i, s := range uiTrigLog { o[i] = s }; return o }(),
+						"dbgTickLog":          func() []interface{} { o := make([]interface{}, len(dbgTickLog)); for i, s := range dbgTickLog { o[i] = s }; return o }(),
 						"luaFlushCount":       luaFlushCount,
 						"luaFlushNonEmpty":    luaFlushNonEmptyCount,
 						"luaFlushOpsTotal":    luaFlushOpsTotal,
