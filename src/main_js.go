@@ -91,6 +91,29 @@ func main() {
 		return nil
 	}))
 
+	// ikemen.setViewport(w, h) — resize the render to match the canvas/window.
+	// Calls sys.setGameSize, which sets scrrect and recomputes gameWidth/
+	// gameHeight by the new aspect (wider window -> wider FOV, taller ->
+	// taller; no stretch). The GL viewport itself is read from canvas.width/
+	// height each BeginFrame, so JS sets those before calling this. Enqueued
+	// onto mainThreadTask so it lands between frames, not mid-draw.
+	bridge.Set("setViewport", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 2 {
+			return false
+		}
+		w := int32(args[0].Int())
+		h := int32(args[1].Int())
+		if w < 16 || h < 16 {
+			return false
+		}
+		if sys.mainThreadTask != nil {
+			sys.mainThreadTask <- func() { sys.setGameSize(w, h) }
+		} else {
+			sys.setGameSize(w, h)
+		}
+		return true
+	}))
+
 	// ikemen.injectKey(code, keyVal, down, mods) — DOM keyboard event bridge
 	// Called from JS event listeners (window.addEventListener keydown/keyup).
 	// Args: code (string), keyVal (int), down (bool), mods (int modifier bitmask).

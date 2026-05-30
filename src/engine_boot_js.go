@@ -186,6 +186,50 @@ func installVFSIoOpen(L *lua.LState) {
 	logConsole("[ikemen-wasm] LUA: io.open overridden to route through VFS")
 }
 
+// installVFSLoadfile overrides Lua's global `loadfile` and `dofile` to read
+// through the VFS. Native loadfile/dofile call os file IO, which can't see the
+// in-memory VFS on wasm. start.lua:1710 runs `assert(loadfile(path))()` to
+// execute the arcade/mode script (external/script/default.lua); without this
+// override it fails with "can not open file" and the match never launches.
+func installVFSLoadfile(L *lua.LState) {
+	// loadfile(path) -> (chunkFn) on success, or (nil, errMsg) on failure.
+	L.SetGlobal("loadfile", L.NewFunction(func(L *lua.LState) int {
+		path := L.CheckString(1)
+		data, err := engineReadFile(path)
+		if err != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString("cannot open " + path + ": " + err.Error()))
+			return 2
+		}
+		fn, lerr := L.LoadString(string(data))
+		if lerr != nil {
+			L.Push(lua.LNil)
+			L.Push(lua.LString("compile error in " + path + ": " + lerr.Error()))
+			return 2
+		}
+		L.Push(fn)
+		return 1
+	}))
+	// dofile(path) -> loads and runs immediately, returning the chunk's results.
+	L.SetGlobal("dofile", L.NewFunction(func(L *lua.LState) int {
+		path := L.CheckString(1)
+		data, err := engineReadFile(path)
+		if err != nil {
+			L.RaiseError("cannot open %s: %s", path, err.Error())
+			return 0
+		}
+		fn, lerr := L.LoadString(string(data))
+		if lerr != nil {
+			L.RaiseError("compile error in %s: %s", path, lerr.Error())
+			return 0
+		}
+		L.Push(fn)
+		L.Call(0, lua.MultRet)
+		return L.GetTop()
+	}))
+	logConsole("[ikemen-wasm] LUA: loadfile/dofile overridden to route through VFS")
+}
+
 // installWriteNoops overrides Lua bindings that try to write to disk.
 // wasm has no fs so saves/options/replays/screenshots can't persist
 // without a localStorage bridge. For v1, no-op them so the engine
@@ -317,6 +361,7 @@ func bootEngine() error {
 		// far we get.
 		installVFSLuaLoader(sys.luaLState)
 		installVFSIoOpen(sys.luaLState)
+		installVFSLoadfile(sys.luaLState)
 		installWriteNoops(sys.luaLState)
 		scriptBytes, readErr := engineReadFile(sys.cfg.Config.System)
 		if readErr != nil {
@@ -420,15 +465,28 @@ func init() {
 					for i, kc := range sys.keyConfig {
 						kcDump += fmt.Sprintf("[%d joy=%d dD=%d dU=%d] ", i, kc.Joy, kc.dD, kc.dU)
 					}
+					p1n := 0
+					p2n := 0
+					if len(sys.chars) > 0 { p1n = len(sys.chars[0]) }
+					if len(sys.chars) > 1 { p2n = len(sys.chars[1]) }
+					stageName := ""
+					if sys.stage != nil { stageName = sys.stage.def }
 					return js.ValueOf(map[string]interface{}{
 						"started":            engineStarted,
 						"err":                engineLastError,
 						"keyStateDown":       sys.keyState[KeyDown],
 						"keyStateUp":         sys.keyState[KeyUp],
+						"keyStateZ":          sys.keyState[Key(0x7a)],
 						"nKeyConfig":         len(sys.keyConfig),
 						"nCmdLists":          len(sys.commandLists),
 						"kcDump":             kcDump,
 						"frameCounter":       int(sys.frameCounter),
+						"gameMode":           sys.gameMode,
+						"gameTime":           sys.gameTime(),
+						"esc":                sys.esc,
+						"p1chars":            p1n,
+						"p2chars":            p2n,
+						"stageDef":           stageName,
 						"storyboardActive":   sys.storyboard.active,
 						"renderQuad":         renderQuadCount,
 						"renderQuadSkip":     renderQuadSkipped,

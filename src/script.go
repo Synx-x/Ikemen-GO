@@ -2548,7 +2548,7 @@ func systemScriptInit(l *lua.LState) {
 		// via engineStatus.
 		luaMenuDrawCalls++
 		if !nilArg(l, 1) {
-			if len(dbgTickLog) < 60 {
+			if len(dbgTickLog) < 300 {
 				dbgTickLog = append(dbgTickLog, strArg(l, 1))
 			}
 		}
@@ -5575,9 +5575,6 @@ func systemScriptInit(l *lua.LState) {
 		// DEBUG: confirm the dbgTickLog channel works + record which Lua menu
 		// loop is the active per-frame driver. refresh() is called once per
 		// frame by whichever loop is running.
-		if sys.frameCounter%20 == 0 && len(dbgTickLog) < 60 {
-			dbgTickLog = append(dbgTickLog, fmt.Sprintf("refresh f%d menuDrawCalls=%d", sys.frameCounter, luaMenuDrawCalls))
-		}
 		sys.tickSound()
 		if !sys.frameSkip {
 			sys.luaFlushDrawQueue()
