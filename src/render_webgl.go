@@ -65,16 +65,24 @@ func u8FromBytes(b []byte) js.Value {
 	return tmpUint8Array.Call("subarray", 0, len(b))
 }
 
-// f32FromFloats copies float32 values into the temp buffer as little-endian bytes
-// and returns a Float32Array view.
+// scratchBytes is a reused little-endian pack buffer so f32FromFloats does not
+// allocate a fresh []byte per call (this runs once per draw quad, thousands of
+// times a second — a fresh slice each time churned the Go heap and was a prime
+// suspect for the GC-driven frame freezes).
+var scratchBytes []byte
+
+// f32FromFloats packs float32 values into the persistent temp buffer as
+// little-endian bytes and returns a Float32Array view. Zero per-call
+// allocations after the first growth.
 func f32FromFloats(f []float32) js.Value {
 	byteLen := len(f) * 4
 	ensureTmpBuffer(byteLen)
-	// Pack floats into bytes as little-endian
-	buf := make([]byte, byteLen)
+	if cap(scratchBytes) < byteLen {
+		scratchBytes = make([]byte, byteLen)
+	}
+	buf := scratchBytes[:byteLen]
 	for i, v := range f {
-		bits := math.Float32bits(v)
-		binary.LittleEndian.PutUint32(buf[i*4:], bits)
+		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 	}
 	js.CopyBytesToJS(tmpUint8Array, buf)
 	return tmpFloat32Array.Call("subarray", 0, len(f))
@@ -971,69 +979,19 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 		return
 	}
 	setVertexDataTotal++
-	// Capture glyph quad vertex payloads verbatim (first 8). inGlyphDraw
-	// set by font.go drawChar. Format: x0,y0,u0,v0, x1,y1,u1,v1, ...
-	if inGlyphDraw && len(glyphVertLog) < 8 {
-		s := ""
-		for i, v := range values {
-			if i > 0 {
-				s += ","
-			}
-			s += fmt.Sprintf("%.1f", v)
-		}
-		s += " P=" + fmt.Sprintf("%v", lastProjection) + " M=" + fmt.Sprintf("%v", lastModelview)
-		glyphVertLog = append(glyphVertLog, s)
-	}
-	// Sample bbox of each quad (every 3rd call) once engine past first
-	// 100 calls (skip startup logo/storyboard). Cap log at 200 entries.
-	if setVertexDataTotal > 100 && setVertexDataTotal%3 == 0 && vertexCallCount < 200 {
-		minX, maxX := values[0], values[0]
-		minY, maxY := values[1], values[1]
-		for i := 0; i < len(values); i += 4 {
-			if values[i] < minX {
-				minX = values[i]
-			}
-			if values[i] > maxX {
-				maxX = values[i]
-			}
-			if values[i+1] < minY {
-				minY = values[i+1]
-			}
-			if values[i+1] > maxY {
-				maxY = values[i+1]
-			}
-		}
-		vertexCallLog = append(vertexCallLog, fmt.Sprintf("#%d xy(%.0f..%.0f,%.0f..%.0f)", setVertexDataTotal, minX, maxX, minY, maxY))
-		vertexCallCount++
-	}
 	// Stash quad centroid (model space) for the post-draw readback in RenderQuad.
 	if len(values) >= 16 {
 		lastQuadCX = (values[0] + values[4] + values[8] + values[12]) / 4
 		lastQuadCY = (values[1] + values[5] + values[9] + values[13]) / 4
 	}
-	// Use a FRESH Float32Array per call (avoid persistent-buffer aliasing).
-	fresh := js.Global().Get("Float32Array").New(len(values))
-	for i, v := range values {
-		fresh.SetIndex(i, v)
-	}
+	// Upload via the persistent pooled Float32Array (f32FromFloats) in a single
+	// CopyBytesToJS, instead of allocating a fresh Float32Array + per-element
+	// SetIndex loop every draw. The old path created two JS heap objects and
+	// N boundary crossings per quad, thousands of times a second — the dominant
+	// driver of the growing heap + GC-stall frame freezes.
+	arr := f32FromFloats(values)
 	webglContext.Call("bindBuffer", ARRAY_BUFFER, r.vertexBuffer)
-	webglContext.Call("bufferData", ARRAY_BUFFER, fresh, DYNAMIC_DRAW)
-
-	// Diagnostic: read GPU buffer back to confirm bufferData stuck.
-	// Captured into bufferReadback for first 3 calls only.
-	if bufferReadbackCount < 3 {
-		readback := js.Global().Get("Float32Array").New(len(values))
-		webglContext.Call("getBufferSubData", ARRAY_BUFFER, 0, readback)
-		s := ""
-		for i := 0; i < len(values); i++ {
-			if i > 0 {
-				s += ","
-			}
-			s += fmt.Sprintf("%.1f", readback.Index(i).Float())
-		}
-		bufferReadback = append(bufferReadback, s)
-		bufferReadbackCount++
-	}
+	webglContext.Call("bufferData", ARRAY_BUFFER, arr, DYNAMIC_DRAW)
 }
 
 var bufferReadback []string
