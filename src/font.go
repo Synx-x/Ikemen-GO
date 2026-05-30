@@ -1401,7 +1401,7 @@ func (ts *TextSprite) Update() {
 }
 
 func (ts *TextSprite) Draw(ln int16) {
-	if len(ts.text) > 0 && len(ts.text) < 20 && len(tsDrawDiag) < 24 {
+	if len(ts.text) > 0 && len(ts.text) < 20 && sys.frameCounter > 60 {
 		reason := "OK"
 		if sys.frameSkip {
 			reason = "frameSkip"
@@ -1414,7 +1414,10 @@ func (ts *TextSprite) Draw(ln int16) {
 		if ts.fnt != nil {
 			ttype = ts.fnt.Type
 		}
-		tsDrawDiag = append(tsDrawDiag, fmt.Sprintf("'%s' %s fntType=%s", ts.text, reason, ttype))
+		tsDrawDiag = append(tsDrawDiag, fmt.Sprintf("f%d '%s' %s fntType=%s", sys.frameCounter, ts.text, reason, ttype))
+		if len(tsDrawDiag) > 24 {
+			tsDrawDiag = tsDrawDiag[len(tsDrawDiag)-24:]
+		}
 	}
 	if sys.frameSkip || ts.layerno != ln || ts.fnt == nil || len(ts.text) == 0 {
 		return

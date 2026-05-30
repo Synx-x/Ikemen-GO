@@ -773,6 +773,12 @@ func (s *System) keepAlive() {
 
 func (s *System) await(fps int) bool {
 	if !s.frameSkip {
+		// DEBUG: sample the menu pixel at the present point (right before
+		// EndFrame), to see if the menu survived to frame-present time.
+		if debugSampleMenuPixel != nil && sys.frameCounter > 5 && len(awaitPixelLog) < 20 {
+			p := debugSampleMenuPixel()
+			awaitPixelLog = append(awaitPixelLog, fmt.Sprintf("f%d present px=[%d,%d,%d]", sys.frameCounter, p[0], p[1], p[2]))
+		}
 		// Render the finished frame
 		gfx.EndFrame()
 		if gfx.GetName()[:6] == "OpenGL" {
@@ -1857,6 +1863,8 @@ var debugSampleMenuPixel func() [4]byte
 var flushLayerLog []string
 var debugFlushLayers = false
 var flushOpsHist []int
+var debugNoFade = false
+var awaitPixelLog []string
 func (s *System) luaDiscardDrawQueue() {
 	luaDiscardCount++
 	s.luaDrawPreOps = s.luaDrawPreOps[:0]

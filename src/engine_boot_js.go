@@ -420,6 +420,7 @@ func init() {
 						"textImgDrawLastFrame": textImgDrawLastFrame,
 						"flushLayerLog":       func() []interface{} { o := make([]interface{}, len(flushLayerLog)); for i, s := range flushLayerLog { o[i] = s }; return o }(),
 						"flushOpsHist":        func() []interface{} { o := make([]interface{}, len(flushOpsHist)); for i, v := range flushOpsHist { o[i] = v }; return o }(),
+						"awaitPixelLog":       func() []interface{} { o := make([]interface{}, len(awaitPixelLog)); for i, s := range awaitPixelLog { o[i] = s }; return o }(),
 						"luaFlushCount":       luaFlushCount,
 						"luaFlushNonEmpty":    luaFlushNonEmptyCount,
 						"luaFlushOpsTotal":    luaFlushOpsTotal,

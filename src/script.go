@@ -5563,10 +5563,12 @@ func systemScriptInit(l *lua.LState) {
 		sys.tickSound()
 		if !sys.frameSkip {
 			sys.luaFlushDrawQueue()
-			if sys.motif.fadeOut.isActive() {
-				sys.motif.fadeOut.draw()
-			} else if sys.motif.fadeIn.isActive() {
-				sys.motif.fadeIn.draw()
+			if !debugNoFade {
+				if sys.motif.fadeOut.isActive() {
+					sys.motif.fadeOut.draw()
+				} else if sys.motif.fadeIn.isActive() {
+					sys.motif.fadeIn.draw()
+				}
 			}
 		} else {
 			// On skipped frames, discard queued draws to avoid buildup.
