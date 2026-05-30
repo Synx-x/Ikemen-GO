@@ -347,6 +347,14 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 	}
 	// Special value "" is used to stop music
 	if filename == "" {
+		bgmBrowserStop()
+		return
+	}
+
+	// wasm: let the browser decode + play BGM (AudioContext.decodeAudioData).
+	// The pure-Go decoder/mixer/speaker chain is stubbed on js. No-op (false)
+	// on native, which falls through to the Go decode below.
+	if bgmBrowserPlay(bgm.filename, loopcount, bgmVolume) {
 		return
 	}
 
