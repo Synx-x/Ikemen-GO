@@ -148,8 +148,21 @@ func (f *Font_Canvas2D) Printf(x, y float32, xscl, yscl float32, spacingXAdd flo
 	}
 	rect := [4]float32{dx, y, w, h}
 
-	modelview := mgl.Translate3D(0, float32(sys.scrrect[3]), 0)
-	proj := gfx.OrthographicProjectionMatrix(0, float32(sys.scrrect[2]), 0, float32(sys.scrrect[3]), -65535, 65535)
+	// Project in GAME space (0..gameWidth, 0..gameHeight), not screen/scrrect
+	// space. DrawTtf passes x,y in game coords (like the bitmap font path), and
+	// the text bitmap is rasterized at game-pixel height. Native Font_GL33.Printf
+	// maps glyphs with a resolution=gameWidth/gameHeight uniform; using scrrect
+	// (1280x720) here instead shrank the text and shoved it left of its
+	// container. The GL viewport stretches game space to fill the canvas.
+	gw, gh := float32(sys.gameWidth), float32(sys.gameHeight)
+	if gw <= 0 {
+		gw = float32(sys.scrrect[2])
+	}
+	if gh <= 0 {
+		gh = float32(sys.scrrect[3])
+	}
+	modelview := mgl.Translate3D(0, gh, 0)
+	proj := gfx.OrthographicProjectionMatrix(0, gw, 0, gh, -65535, 65535)
 
 	x1, y1 := rect[0], -rect[1]
 	x2, y2 := rect[0]+rect[2], -(rect[1] + rect[3])
