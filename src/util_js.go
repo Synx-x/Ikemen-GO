@@ -39,6 +39,20 @@ func ShowErrorDialog(message string) {
 // as blank, bitmap fonts still work, which covers the majority of
 // motif text rendering.
 func LoadFntTtf(f *Fnt, fontfile string, filename string, height int32) {
-	// Leave f.Type / f.Size intact so callers don't crash on field reads.
-	// Real glyph atlas + texture upload land in D7.
+	// Wasm TrueType path: rasterize via Canvas 2D (font_ttf_js.go) instead
+	// of freetype. Mirrors native LoadFntTtf's height/Size handling so the
+	// engine's TTF text (menu items, options, etc.) renders. f.Type is
+	// already "truetype" (set by loadDefInfo), so font.go DrawTtf now finds
+	// f.ttf != nil and calls Font_Canvas2D.Printf.
+	if height == -1 {
+		height = int32(f.Size[1])
+	} else {
+		f.Size[1] = uint16(height)
+	}
+	if height <= 0 {
+		height = 24
+	}
+	f.ttf = newFontCanvas2D(height)
+	// Dummy palettes so any palette-indexed code path doesn't nil-deref.
+	f.palettes = make([][256]uint32, 1)
 }

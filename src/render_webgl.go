@@ -483,6 +483,21 @@ func (r *Renderer_WebGL) Close() {
 	logConsole("Renderer_WebGL.Close called")
 }
 
+func init() {
+	// Wire the per-layer menu-pixel sampler used by luaFlushDrawQueue debug.
+	// Reads one pixel at the menu text location (GL bottom-origin ~780,322).
+	debugSampleMenuPixel = func() [4]byte {
+		if !webglContext.Truthy() {
+			return [4]byte{}
+		}
+		rb := js.Global().Get("Uint8Array").New(4)
+		webglContext.Call("readPixels", 780, 322, 1, 1, glRGBA, UNSIGNED_BYTE, rb)
+		out := make([]byte, 4)
+		js.CopyBytesToGo(out, rb)
+		return [4]byte{out[0], out[1], out[2], out[3]}
+	}
+}
+
 func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
 	if !webglContext.Truthy() {
 		return
@@ -949,6 +964,7 @@ var vertexCallCount int
 var setVertexDataTotal int
 var lastProjection [16]float32
 var lastModelview [16]float32
+var lastQuadCX, lastQuadCY float32
 
 func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 	if !webglContext.Truthy() || !r.vertexBuffer.Truthy() {
@@ -989,6 +1005,11 @@ func (r *Renderer_WebGL) SetVertexData(values ...float32) {
 		}
 		vertexCallLog = append(vertexCallLog, fmt.Sprintf("#%d xy(%.0f..%.0f,%.0f..%.0f)", setVertexDataTotal, minX, maxX, minY, maxY))
 		vertexCallCount++
+	}
+	// Stash quad centroid (model space) for the post-draw readback in RenderQuad.
+	if len(values) >= 16 {
+		lastQuadCX = (values[0] + values[4] + values[8] + values[12]) / 4
+		lastQuadCY = (values[1] + values[5] + values[9] + values[13]) / 4
 	}
 	// Use a FRESH Float32Array per call (avoid persistent-buffer aliasing).
 	fresh := js.Global().Get("Float32Array").New(len(values))
@@ -1047,8 +1068,52 @@ func (r *Renderer_WebGL) RenderQuad() {
 	webglContext.Call("disable", CULL_FACE)
 	webglContext.Call("disable", DEPTH_TEST)
 	webglContext.Call("disable", SCISSOR_TEST)
+	// DEBUG: sample the framebuffer at the quad's own screen pixel BEFORE and
+	// AFTER drawArrays. If after != before, this draw changed pixels (so it
+	// works and something later overdraws). If after == before, the draw
+	// produced nothing despite correct state/geometry. Transform the stored
+	// centroid through M then P (column-major) to NDC, then to a GL pixel.
+	doReadback := inGlyphDraw && setVertexDataTotal > 500 && len(glyphQuadReadback) < 8
+	var px, py int
+	var before []byte
+	if doReadback {
+		// M·v (column-major: out_r = sum_c M[c*4+r]*v_c), v=(cx,cy,0,1)
+		mv := func(m [16]float32, x, y float32) (float32, float32, float32, float32) {
+			vx := m[0]*x + m[4]*y + m[12]
+			vy := m[1]*x + m[5]*y + m[13]
+			vz := m[2]*x + m[6]*y + m[14]
+			vw := m[3]*x + m[7]*y + m[15]
+			return vx, vy, vz, vw
+		}
+		ex, ey, _, _ := mv(lastModelview, lastQuadCX, lastQuadCY)
+		// P·(eye) — eye z≈0, w≈1; reuse mv with z folded via z=0 already
+		cx := lastProjection[0]*ex + lastProjection[4]*ey + lastProjection[12]
+		cy := lastProjection[1]*ex + lastProjection[5]*ey + lastProjection[13]
+		cw := lastProjection[3]*ex + lastProjection[7]*ey + lastProjection[15]
+		if cw == 0 {
+			cw = 1
+		}
+		ndcx, ndcy := cx/cw, cy/cw
+		px = int((ndcx + 1) / 2 * 1024)
+		py = int((ndcy + 1) / 2 * 768)
+		before = make([]byte, 4)
+		rb := js.Global().Get("Uint8Array").New(4)
+		webglContext.Call("readPixels", px, py, 1, 1, glRGBA, UNSIGNED_BYTE, rb)
+		js.CopyBytesToGo(before, rb)
+	}
 	webglContext.Call("drawArrays", 5, 0, 4)
 	renderQuadCount++
+	if doReadback {
+		after := make([]byte, 4)
+		rb := js.Global().Get("Uint8Array").New(4)
+		webglContext.Call("readPixels", px, py, 1, 1, glRGBA, UNSIGNED_BYTE, rb)
+		js.CopyBytesToGo(after, rb)
+		glyphQuadReadback = append(glyphQuadReadback, fmt.Sprintf(
+			"px=(%d,%d) before=[%d,%d,%d,%d] after=[%d,%d,%d,%d] changed=%v",
+			px, py, before[0], before[1], before[2], before[3],
+			after[0], after[1], after[2], after[3],
+			before[0] != after[0] || before[1] != after[1] || before[2] != after[2]))
+	}
 }
 
 var glyphRenderQuadCount int

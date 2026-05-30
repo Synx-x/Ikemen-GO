@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"regexp"
 	"strings"
@@ -530,6 +531,10 @@ func (f *Fnt) getCharSpr(c rune, bank, bt int32) *Sprite {
 
 // Diagnostic counters for wasm font-glyph render bug (exposed via engineStatus).
 var glyphDrawAttempts, glyphSprNil, glyphTexNil, glyphRendered int
+var glyphDiag []string
+var debugGlyphRect = false
+var debugGlyphFlat = false
+var tsDrawDiag []string
 
 // inGlyphDraw is true while a font glyph quad is being submitted, so the
 // renderer can capture its vertex data specifically. Plain bool: harmless
@@ -611,6 +616,22 @@ func (f *Fnt) drawChar(
 	rp.size = spr.Size
 	rp.x = -x * sys.widthScale
 	rp.y = -y * sys.heightScale
+
+	if c != ' ' {
+		// Reproduce renderSpriteQuad's no-rot/no-tile y endpoints to see if
+		// the glyph survives the (-scrrect[3],0) on-screen clip gate.
+		// Rolling buffer of the most recent draws so menu glyphs (which draw
+		// after the loading screen) replace the loading-text samples.
+		ys := yscl * sys.heightScale
+		y1 := (rp.y - ys*float32(rp.size[1]))
+		y4 := rp.y
+		onScreen := (0 > y1 || 0 > y4) && (y1 > float32(-sys.scrrect[3]) || y4 > float32(-sys.scrrect[3]))
+		glyphDiag = append(glyphDiag, fmt.Sprintf("'%c' sz=%dx%d cd=%d paltex=%v rpX=%.0f rpY=%.0f y1=%.0f y4=%.0f onScr=%v bm=%d ba=[%d,%d]",
+			c, rp.size[0], rp.size[1], spr.coldepth, rp.paltex != nil, rp.x, rp.y, y1, y4, onScreen, rp.blendMode, rp.blendAlpha[0], rp.blendAlpha[1]))
+		if len(glyphDiag) > 24 {
+			glyphDiag = glyphDiag[len(glyphDiag)-24:]
+		}
+	}
 
 	RenderSprite(rp)
 	return float32(spr.Size[0]) * xscl
@@ -1380,6 +1401,21 @@ func (ts *TextSprite) Update() {
 }
 
 func (ts *TextSprite) Draw(ln int16) {
+	if len(ts.text) > 0 && len(ts.text) < 20 && len(tsDrawDiag) < 24 {
+		reason := "OK"
+		if sys.frameSkip {
+			reason = "frameSkip"
+		} else if ts.layerno != ln {
+			reason = fmt.Sprintf("layerMismatch(layerno=%d,ln=%d)", ts.layerno, ln)
+		} else if ts.fnt == nil {
+			reason = "fntNil"
+		}
+		ttype := "?"
+		if ts.fnt != nil {
+			ttype = ts.fnt.Type
+		}
+		tsDrawDiag = append(tsDrawDiag, fmt.Sprintf("'%s' %s fntType=%s", ts.text, reason, ttype))
+	}
 	if sys.frameSkip || ts.layerno != ln || ts.fnt == nil || len(ts.text) == 0 {
 		return
 	}

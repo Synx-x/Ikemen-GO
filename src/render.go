@@ -637,6 +637,14 @@ func RenderSprite(rp RenderParams) {
 	gfx.SetUniformF("hue", hue)
 	gfx.SetUniformFv("tint", tint[:])
 
+	// DEBUG: force glyphs flat opaque magenta through the SAME path the (visible)
+	// logo uses. If glyphs now appear, the bug was texture/sampling. If still
+	// invisible, the glyph draw is being overdrawn later in the frame.
+	if inGlyphDraw && debugGlyphFlat {
+		gfx.SetUniformI("isFlat", 1)
+		gfx.SetUniformFv("tint", []float32{1, 0, 1, 1})
+	}
+
 	if rp.paltex == nil {
 		gfx.SetUniformI("isRgba", 1)
 	} else {

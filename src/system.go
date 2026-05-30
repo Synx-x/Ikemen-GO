@@ -1803,21 +1803,62 @@ func (s *System) luaQueueLayerDraw(layer int, fn func()) {
 	s.luaDrawLayerOps[layer] = append(s.luaDrawLayerOps[layer], fn)
 }
 
+var luaFlushCount, luaDiscardCount, luaFlushNonEmptyCount, luaFlushOpsTotal int
+
 func (s *System) luaFlushDrawQueue() {
+	luaFlushCount++
+	nOps := len(s.luaDrawPreOps)
+	for i := range s.luaDrawLayerOps {
+		nOps += len(s.luaDrawLayerOps[i])
+	}
+	if nOps > 0 {
+		luaFlushNonEmptyCount++
+		luaFlushOpsTotal += nOps
+	}
+	if sys.frameCounter > 100 {
+		flushOpsHist = append(flushOpsHist, nOps)
+		if len(flushOpsHist) > 30 {
+			flushOpsHist = flushOpsHist[len(flushOpsHist)-30:]
+		}
+	}
+	// DEBUG: capture this flush's per-layer op counts + the menu pixel after
+	// each layer, once, to find which layer overdraws the menu text.
+	captureLayers := debugFlushLayers && sys.frameCounter > 120 && nOps > 3
+	if captureLayers {
+		flushLayerLog = flushLayerLog[:0]
+	}
 	// Pre-pass
 	for _, fn := range s.luaDrawPreOps {
 		fn()
 	}
 	s.luaDrawPreOps = s.luaDrawPreOps[:0]
+	if captureLayers && debugSampleMenuPixel != nil {
+		p := debugSampleMenuPixel()
+		flushLayerLog = append(flushLayerLog, fmt.Sprintf("pre ops=%d px=[%d,%d,%d]", len(s.luaDrawPreOps), p[0], p[1], p[2]))
+	}
 	// Layered passes
 	for i := range s.luaDrawLayerOps {
+		n := len(s.luaDrawLayerOps[i])
 		for _, fn := range s.luaDrawLayerOps[i] {
 			fn()
+		}
+		if captureLayers && n > 0 && debugSampleMenuPixel != nil {
+			p := debugSampleMenuPixel()
+			flushLayerLog = append(flushLayerLog, fmt.Sprintf("L%d ops=%d px=[%d,%d,%d]", i, n, p[0], p[1], p[2]))
 		}
 		s.luaDrawLayerOps[i] = s.luaDrawLayerOps[i][:0]
 	}
 }
+
+// debugSampleMenuPixel reads one framebuffer pixel at the menu location; set by
+// the wasm renderer (render_webgl.go). nil on native. flushLayerLog captures one
+// flush's per-layer pixel trace.
+var debugSampleMenuPixel func() [4]byte
+var flushLayerLog []string
+var debugFlushLayers = false
+var flushOpsHist []int
 func (s *System) luaDiscardDrawQueue() {
+	luaDiscardCount++
 	s.luaDrawPreOps = s.luaDrawPreOps[:0]
 	for i := range s.luaDrawLayerOps {
 		s.luaDrawLayerOps[i] = s.luaDrawLayerOps[i][:0]

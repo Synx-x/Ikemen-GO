@@ -18,6 +18,13 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// Diagnostic counters for the wasm title-menu render investigation.
+var (
+	textImgDrawTotal     int
+	textImgDrawLastFrame int
+	textImgDrawSamples   []string
+)
+
 // ExecFunc executes a Lua function by name and returns its boolean result.
 func ExecFunc(l *lua.LState, funcName string) (bool, error) {
 	// Retrieve the Lua function by name
@@ -6787,6 +6794,15 @@ func systemScriptInit(l *lua.LState) {
 		//tsSnap := *ts
 		tsSnap := ts.Copy()
 		layerLocal := layer
+		textImgDrawTotal++
+		textImgDrawLastFrame = int(sys.frameCounter)
+		if len(textImgDrawSamples) < 40 {
+			txt := tsSnap.text
+			if len(txt) > 24 {
+				txt = txt[:24]
+			}
+			textImgDrawSamples = append(textImgDrawSamples, fmt.Sprintf("f%d L%d '%s'", sys.frameCounter, layerLocal, txt))
+		}
 		sys.luaQueueLayerDraw(int(layerLocal), func() {
 			//(&tsSnap).Draw(layerLocal)
 			tsSnap.Draw(layerLocal)
