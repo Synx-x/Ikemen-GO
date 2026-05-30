@@ -951,6 +951,26 @@ func (s *SoundEffect) Stream(samples [][2]float64) (n int, ok bool) {
 	return n, ok
 }
 
+// browserParams returns the channel volume (0..512 engine scale) and a -1..1
+// stereo pan for browser SFX playback. The pan reuses Stream()'s positional
+// model: r is the left-channel weight (0 = full right, 1 = full left), mapped
+// to StereoPanner's -1 (left) .. +1 (right) and scaled by PanningRange. Gated
+// by the StereoEffects config like the native panner.
+func (s *SoundEffect) browserParams() (float32, float32) {
+	pan := float32(0)
+	if sys.cfg.Sound.StereoEffects && (s.x != nil || s.pan != 0) {
+		var r float32
+		if s.x != nil {
+			r = ((sys.xmax - s.localscl**s.x) - s.pan) / (sys.xmax - sys.xmin)
+		} else {
+			r = ((sys.xmax-sys.xmin)/2 - s.pan) / (sys.xmax - sys.xmin)
+		}
+		sc := sys.cfg.Sound.PanningRange / 100
+		pan = Clamp((1-2*r)*sc, -1, 1)
+	}
+	return s.volume, pan
+}
+
 func (s *SoundEffect) Err() error {
 	return s.streamer.Err()
 }
@@ -972,6 +992,8 @@ type SoundChannel struct {
 	timeStamp     int32
 	volResume     float32 // For pausing/unpausing
 	pauseVolumeApplied bool
+	pendingPlay   bool // wasm: browser SFX trigger deferred to Tick (after SetVolume/SetPan)
+	pendingLoop   bool
 }
 
 // The old Stop() plus more
@@ -997,6 +1019,7 @@ func (s *SoundChannel) Reset() {
 
 	s.volResume = 0
 	s.pauseVolumeApplied = false
+	s.pendingPlay = false
 }
 
 func (s *SoundChannel) Play(sound *Sound, group, number, loop int32, freqmul float32, loopStart, loopEnd, startPosition int) {
@@ -1025,6 +1048,17 @@ func (s *SoundChannel) Play(sound *Sound, group, number, loop int32, freqmul flo
 	resampler := Resample(Clamp(sys.cfg.Sound.AudioResampleQuality, 1, 16), srcRate, dstRate, s.sfx)
 	s.ctrl = & Ctrl{Streamer: resampler}
 	s.streamer.Seek(startPosition)
+
+	// wasm: route per-channel SFX (character hit/voice/attack sounds, played
+	// via Char.playSound -> ch.Play) through the browser mixer. The native
+	// soundMixer below is a stubbed no-op on js, so without this only the
+	// SoundChannels.Play (plural, system/menu) path was audible while every
+	// character/impact sound stayed silent. Defer the actual browser trigger to
+	// Tick(): Char.playSound calls SetVolume/SetPan AFTER this Play() returns,
+	// so volume/pan are only final one step later. streamer/sfx are set above,
+	// so Tick() stays nil-safe. No-op on native (sfxBrowserPlay returns false).
+	s.pendingPlay = true
+	s.pendingLoop = loop < 0
 
 	WithSpeakerLock(func() {
 		sys.soundMixer.Add(s.ctrl)
@@ -1335,10 +1369,19 @@ func (s *SoundChannels) Tick() {
 	channels := *s
 	for i := range channels {
 		v := &channels[i]
-		if v.IsPlaying() {
-			if v.streamer.Position() >= v.sound.length && v.sfx.loop != -1 { // End of sound
-				v.Reset()
-			}
+		if v.sound == nil {
+			continue
+		}
+		// wasm: fire the deferred browser SFX trigger now that Char.playSound's
+		// post-Play SetVolume/SetPan have set the final level + position. No-op
+		// on native (sfxBrowserPlay returns false).
+		if v.pendingPlay {
+			v.pendingPlay = false
+			vol, pan := v.sfx.browserParams()
+			sfxBrowserPlay(v.sound, vol, pan, v.pendingLoop)
+		}
+		if v.streamer.Position() >= v.sound.length && v.sfx.loop != -1 { // End of sound
+			v.Reset()
 		}
 	}
 }
