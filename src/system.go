@@ -147,6 +147,13 @@ type SystemStateVars struct {
 	winposetime  int32
 }
 
+// forceNoFrameSkip disables the wall-clock frame-skip path in await().
+// Set true at wasm boot (engine_boot_js.go) because the rAF-driven loop +
+// wasm time.Sleep semantics otherwise pin frameSkip=true, which makes
+// refresh() discard the Lua draw queue and drop menu text. Default false
+// keeps native behavior unchanged.
+var forceNoFrameSkip bool
+
 // sys
 // The only instance of a System struct.
 // Do not create more than 1.
@@ -816,6 +823,15 @@ func (s *System) await(fps int) bool {
 			s.redrawWait.nextTime = now.Add(waitDuration)
 		}
 		s.frameSkip = true
+	}
+
+	// On wasm the engine loop is driven by requestAnimationFrame and time.Sleep
+	// behaves differently than on native, so the wall-clock frame-pacing math
+	// above flips frameSkip=true persistently. That makes refresh() call
+	// luaDiscardDrawQueue, silently dropping every Lua textImgDraw/rectDraw —
+	// menu items flash once then vanish. Force frameSkip off when requested.
+	if forceNoFrameSkip {
+		s.frameSkip = false
 	}
 
 	s.eventUpdate()

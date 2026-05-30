@@ -221,6 +221,12 @@ func bootEngine() error {
 
 	logConsole("[ikemen-wasm] bootEngine() entered")
 
+	// Disable the wall-clock frame-skip path. On wasm the rAF-driven loop +
+	// time.Sleep semantics pin frameSkip=true, which makes refresh() discard
+	// the Lua draw queue (luaDiscardDrawQueue) and drop all menu textImgDraw
+	// /rectDraw calls — menu items flash once then vanish.
+	forceNoFrameSkip = true
+
 	// Ensure cmdFlags map exists
 	if sys.cmdFlags == nil {
 		sys.cmdFlags = make(map[string]string)

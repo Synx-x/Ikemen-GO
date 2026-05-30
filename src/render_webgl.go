@@ -1042,33 +1042,16 @@ func (r *Renderer_WebGL) RenderQuad() {
 		renderQuadSkipped++
 		return
 	}
-	if renderQuadCount > 150 && renderQuadCount%5 == 0 && len(drawTimeLog) < 60 {
-		drawTimeLog = append(drawTimeLog, fmt.Sprintf("#%d P0=%.4f P5=%.4f Px=%.2f Py=%.2f M13=%.1f", renderQuadCount, lastProjection[0], lastProjection[5], lastProjection[12], lastProjection[13], lastModelview[13]))
-	}
-	// Glyph instrumentation: count glyph RenderQuads + read back what the
-	// GPU buffer actually holds at glyph draw time (first 8 glyph draws).
 	if inGlyphDraw {
 		glyphRenderQuadCount++
-		if len(glyphQuadReadback) < 4 {
-			// Read ACTUAL GPU uniform values at glyph draw (ground truth,
-			// not the Go-side mirror). useProgram first so getUniform reads
-			// the right program.
-			// Read VAO attrib-0 (position) state: which buffer it reads,
-			// enabled, size, stride. Compare to r.vertexBuffer.
-			webglContext.Call("bindVertexArray", r.vao)
-			attrBuf := webglContext.Call("getVertexAttrib", 0, 0x889F) // BUFFER_BINDING
-			en0 := webglContext.Call("getVertexAttrib", 0, 0x8622).Bool()  // ARRAY_ENABLED
-			sz0 := webglContext.Call("getVertexAttrib", 0, 0x8623).Int()   // ARRAY_SIZE
-			st0 := webglContext.Call("getVertexAttrib", 0, 0x8624).Int()   // ARRAY_STRIDE
-			en1 := webglContext.Call("getVertexAttrib", 1, 0x8622).Bool()
-			sameBuf := attrBuf.Truthy() && attrBuf.Equal(r.vertexBuffer)
-			glyphQuadReadback = append(glyphQuadReadback, fmt.Sprintf(
-				"attr0bufIsVertexBuffer=%v attr0enabled=%v size=%d stride=%d attr1enabled=%v vaoTruthy=%v",
-				sameBuf, en0, sz0, st0, en1, r.vao.Truthy()))
-		}
 	}
 	webglContext.Call("useProgram", r.spriteProgram)
 	webglContext.Call("bindVertexArray", r.vao)
+	// Per-draw safety: ensure cull/depth/scissor can't hide this quad even
+	// if a prior Set* call re-enabled them mid-frame.
+	webglContext.Call("disable", CULL_FACE)
+	webglContext.Call("disable", DEPTH_TEST)
+	webglContext.Call("disable", SCISSOR_TEST)
 	webglContext.Call("drawArrays", 5, 0, 4)
 	renderQuadCount++
 }
