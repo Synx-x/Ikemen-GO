@@ -711,12 +711,6 @@ func readSound(f io.ReadSeekCloser, size uint32) (*Sound, error) {
 	if _, err := f.Read(wavData); err != nil {
 		return nil, err
 	}
-	// wasm: the Go WAV decoder is stubbed. Keep the raw bytes and let the
-	// browser decode at play time (sfxBrowserPlay). validateSoundJS returns the
-	// sound with its bytes; the native path below is skipped.
-	if snd, handled := validateSoundJS(wavData); handled {
-		return snd, nil
-	}
 	// Decode the sound at least once, so that we know the format is OK
 	s, wavfmt, err := DecodeWav(bytes.NewReader(wavData))
 	if err != nil {
@@ -1014,14 +1008,6 @@ func (s *SoundChannel) Play(sound *Sound, group, number, loop int32, freqmul flo
 	s.group = group
 	s.number = number
 	s.timeStamp = sys.gameTime()
-
-	// wasm: play through the browser (decode raw wavData via AudioContext,
-	// cached by content hash). No-op (false) on native, which uses the Go
-	// streamer/mixer chain below.
-	if sfxBrowserPlay(sound.wavData, loop, freqmul) {
-		return
-	}
-
 	s.streamer = s.sound.GetStreamer()
 
 	loopCount := int(0)
@@ -1295,6 +1281,12 @@ func (s *SoundChannels) Get(pid int32, ch int32) *SoundChannel {
 func (s *SoundChannels) Play(sound *Sound, group, number, volumescale int32, pan float32, loopStart, loopEnd, startPosition int) bool {
 	if sound == nil {
 		return false
+	}
+	// wasm: play through the browser (Go mixer/speaker stubbed). loopEnd<0 or
+	// a negative loop convention isn't used here; SFX are one-shot unless the
+	// engine requested looping via loopStart/loopEnd spanning the whole clip.
+	if sfxBrowserPlay(sound, float32(volumescale*64/25), pan, loopEnd < 0) {
+		return true
 	}
 	c := s.Request(-1, -1, false, 0)
 	if c == nil {

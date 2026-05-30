@@ -83,7 +83,7 @@ var errAudioJS = errors.New("audio decoders not available on js/wasm")
 
 func DecodeVorbis(r io.ReadCloser) (StreamSeeker, Format, error) { return nil, Format{}, errAudioJS }
 func DecodeMP3(r io.ReadCloser) (StreamSeeker, Format, error)    { return nil, Format{}, errAudioJS }
-func DecodeWav(r io.Reader) (StreamSeeker, Format, error)        { return nil, Format{}, errAudioJS }
+func DecodeWav(r io.Reader) (StreamSeeker, Format, error)        { return decodeWavJS(r) }
 func DecodeFlac(r io.Reader) (StreamSeeker, Format, error)       { return nil, Format{}, errAudioJS }
 func DecodeMidi(r io.ReadCloser, sf *MidiSoundFont, sr SampleRate) (StreamSeeker, Format, error) {
 	return nil, Format{}, errAudioJS

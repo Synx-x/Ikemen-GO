@@ -2,71 +2,59 @@
 
 package main
 
-import (
-	"hash/fnv"
-	"strconv"
-	"syscall/js"
-)
+import "syscall/js"
 
-// Browser-decoded SFX path. The Go WAV decoder + mixer + speaker are stubbed on
-// wasm, so .snd sound effects can't decode or play through the native chain.
-// Instead keep the raw WAV bytes at load time and hand them to the harness at
-// play time. The harness decodes each WAV once via AudioContext.decodeAudioData,
-// caches the AudioBuffer by content hash, and fires a one-shot BufferSource.
+// Browser-played SFX. The Go mixer/speaker is stubbed on wasm, so sound
+// effects (decoded into Sound.wavData by decodeWavJS) never reach output
+// through the native chain. Instead each distinct Sound's raw WAV bytes are
+// handed to the harness once, the browser decodes + caches an AudioBuffer
+// keyed by a serial id, and each play spawns a fresh BufferSource (polyphonic,
+// low-latency). SoundChannel.Play (sound.go) calls sfxBrowserPlay on js.
 
-// validateSoundJS replaces readSound's Go decode-test on wasm. It accepts the
-// raw WAV bytes without decoding (the browser validates at play time) and
-// returns a Sound carrying the bytes. handled=true means skip the native path.
-func validateSoundJS(wavData []byte) (*Sound, bool) {
-	if len(wavData) == 0 {
-		return nil, true // empty: treat as handled (disabled), no native decode
-	}
-	return &Sound{wavData: wavData, format: Format{}, length: 0}, true
-}
+var sfxNextID int
+var sfxUploaded = map[*Sound]int{} // Sound -> browser cache id (uploaded once)
 
-// sfxBrowserPlay plays a one-shot sound effect through the browser. Returns true
-// (handled) on wasm so SoundChannel.Play skips the dead native chain.
-func sfxBrowserPlay(wavData []byte, loop int32, freqmul float32) bool {
-	if len(wavData) == 0 {
+// sfxBrowserPlay uploads the sound's WAV bytes to the harness on first use,
+// then triggers a one-shot play at the given volume (0..512 engine scale) and
+// pan (-1..1). Returns true if handled on js (caller skips the dead native
+// mixer path). volScale is the engine's 0..256-ish channel volume.
+func sfxBrowserPlay(sound *Sound, volume float32, pan float32, loop bool) bool {
+	if sound == nil {
 		return true
 	}
 	if _, ok := sys.cmdFlags["-nosound"]; ok {
 		return true
 	}
 	audio := js.Global().Get("ikemenAudio")
-	if !audio.Truthy() || audio.Get("playSfx").IsUndefined() {
-		return true // bridge absent: handled (silent), don't run native path
+	if !audio.Truthy() || len(sound.wavData) == 0 {
+		return true
 	}
 
-	// Content hash keys the browser-side AudioBuffer cache so each distinct WAV
-	// decodes once, not on every play.
-	h := fnv.New64a()
-	h.Write(wavData)
-	key := strconv.FormatUint(h.Sum64(), 36)
-
-	gain := 1.0
-	if mv := sys.cfg.Sound.MasterVolume; mv > 0 {
-		gain *= float64(mv) / 100.0
+	id, uploaded := sfxUploaded[sound]
+	if !uploaded {
+		sfxNextID++
+		id = sfxNextID
+		sfxUploaded[sound] = id
+		u8 := js.Global().Get("Uint8Array").New(len(sound.wavData))
+		js.CopyBytesToJS(u8, sound.wavData)
+		audio.Call("uploadSfx", id, u8)
 	}
+
+	// Engine channel volume is ~256 nominal; scale to 0..1 then apply
+	// WavVolume + MasterVolume like the native Normalizer does.
+	gain := float64(volume) / 256.0
 	if wv := sys.cfg.Sound.WavVolume; wv > 0 {
 		gain *= float64(wv) / 100.0
+	}
+	if mv := sys.cfg.Sound.MasterVolume; mv > 0 {
+		gain *= float64(mv) / 100.0
 	}
 	if gain < 0 {
 		gain = 0
 	}
-	if gain > 1 {
-		gain = 1
+	if gain > 1.5 {
+		gain = 1.5
 	}
-
-	// Pass bytes only when the browser hasn't cached this key yet, to avoid
-	// copying every play. hasSfx(key) reports cache state.
-	cached := audio.Call("hasSfx", key).Truthy()
-	if cached {
-		audio.Call("playSfx", key, js.Null(), gain, loop != 0)
-	} else {
-		u8 := js.Global().Get("Uint8Array").New(len(wavData))
-		js.CopyBytesToJS(u8, wavData)
-		audio.Call("playSfx", key, u8, gain, loop != 0)
-	}
+	audio.Call("playSfx", id, gain, float64(pan), loop)
 	return true
 }

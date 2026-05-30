@@ -9,3 +9,6 @@ package main
 func bgmBrowserPlay(filename string, loopcount int, bgmVolume int) bool { return false }
 func bgmBrowserStop()                                                   {}
 func bgmBrowserSetVolume(bgmVolume int)                                 {}
+
+// SFX browser path is js-only; native uses the real mixer.
+func sfxBrowserPlay(sound *Sound, volume float32, pan float32, loop bool) bool { return false }
