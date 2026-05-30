@@ -496,11 +496,6 @@ func (r *Renderer_WebGL) BeginFrame(clearColor bool) {
 	webglContext.Call("disable", DEPTH_TEST)
 	webglContext.Call("disable", SCISSOR_TEST)
 
-	// Honor the clearColor flag. Engine calls BeginFrame(false) after
-	// motif's storyboard render to PRESERVE the drawn text/menu items
-	// for the outer renderFrame loop (motif.go:2774). Unconditional
-	// clear wiped menu draws between layers, causing menu items to
-	// flash visible then vanish.
 	if clearColor {
 		webglContext.Call("clearColor", 0.0, 0.0, 0.0, 1.0)
 		webglContext.Call("clear", COLOR_BUFFER_BIT)
