@@ -732,11 +732,19 @@ func (s *System) eventUpdate() bool {
 	return !s.gameEnd
 }
 
+// mainThreadTaskHook, when non-nil (set only on js for freeze diagnosis),
+// wraps each drained task so its wall-clock cost can be timed. nil on native.
+var mainThreadTaskHook func(f func())
+
 func (s *System) runMainThreadTask() {
 	for {
 		select {
 		case f := <-s.mainThreadTask:
-			f()
+			if mainThreadTaskHook != nil {
+				mainThreadTaskHook(f)
+			} else {
+				f()
+			}
 		default:
 			return
 		}

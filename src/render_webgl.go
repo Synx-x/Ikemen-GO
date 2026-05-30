@@ -139,10 +139,56 @@ func texFormatForDepth(depth int32) (internalFormat, format, dtype int) {
 }
 
 // Implement Texture interface
+// Perf instrumentation for freeze diagnosis. perfNow reads JS performance.now()
+// (ms). texUploadWorstMs / texUploadCount track GPU texture uploads; these run
+// on the main thread (SetData -> texImage2D) and are a freeze suspect.
+// performance.now() is receiver-bound: it must be called as a method on the
+// performance object. Calling the detached function value via Invoke() sets
+// this=undefined and the browser throws "TypeError: Illegal invocation",
+// which panicked sys.init the first time a main-thread task drained through
+// perfNow (via mainThreadTaskHook).
+var perfObj = js.Global().Get("performance")
+
+func perfNow() float64 { return perfObj.Call("now").Float() }
+
+var (
+	texUploadWorstMs  float64
+	texUploadCount    int
+	texUploadLastMs   float64
+	texUploadBytesMax int
+
+	mtTaskWorstMs float64 // worst single main-thread task (GPU upload batch etc)
+	mtTaskCount   int
+)
+
+func init() {
+	// Time each drained main-thread task. These run synchronously on the game
+	// loop; a slow one (e.g. first-use GPU texture upload) stalls the frame.
+	mainThreadTaskHook = func(f func()) {
+		t0 := perfNow()
+		f()
+		dt := perfNow() - t0
+		mtTaskCount++
+		if dt > mtTaskWorstMs {
+			mtTaskWorstMs = dt
+		}
+	}
+}
+
 func (t *Texture_WebGL) SetData(data []byte) {
 	if !t.handle.Truthy() {
 		return
 	}
+	_t0 := perfNow()
+	defer func() {
+		dt := perfNow() - _t0
+		texUploadCount++
+		texUploadLastMs = dt
+		if dt > texUploadWorstMs {
+			texUploadWorstMs = dt
+			texUploadBytesMax = len(data)
+		}
+	}()
 
 	internal, fmt, dtype := texFormatForDepth(t.depth)
 
