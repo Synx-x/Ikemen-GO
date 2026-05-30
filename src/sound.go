@@ -711,6 +711,12 @@ func readSound(f io.ReadSeekCloser, size uint32) (*Sound, error) {
 	if _, err := f.Read(wavData); err != nil {
 		return nil, err
 	}
+	// wasm: the Go WAV decoder is stubbed. Keep the raw bytes and let the
+	// browser decode at play time (sfxBrowserPlay). validateSoundJS returns the
+	// sound with its bytes; the native path below is skipped.
+	if snd, handled := validateSoundJS(wavData); handled {
+		return snd, nil
+	}
 	// Decode the sound at least once, so that we know the format is OK
 	s, wavfmt, err := DecodeWav(bytes.NewReader(wavData))
 	if err != nil {
@@ -1008,6 +1014,14 @@ func (s *SoundChannel) Play(sound *Sound, group, number, loop int32, freqmul flo
 	s.group = group
 	s.number = number
 	s.timeStamp = sys.gameTime()
+
+	// wasm: play through the browser (decode raw wavData via AudioContext,
+	// cached by content hash). No-op (false) on native, which uses the Go
+	// streamer/mixer chain below.
+	if sfxBrowserPlay(sound.wavData, loop, freqmul) {
+		return
+	}
+
 	s.streamer = s.sound.GetStreamer()
 
 	loopCount := int(0)
